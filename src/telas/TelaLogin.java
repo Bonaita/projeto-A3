@@ -24,6 +24,10 @@ public class TelaLogin extends JFrame {
     private JButton btnEntrar;
     private JButton btnSair;
 
+    // --- Contador de tentativas ---
+    private int tentativas = 0;
+    private final int LIMITE_TENTATIVAS = 3;
+
     // --- Construtor da Classe ---
     // É executado quando a tela é "criada" (ex: new TelaLogin())
     public TelaLogin() {
@@ -69,6 +73,9 @@ public class TelaLogin extends JFrame {
         btnSair.setBounds(240, 130, 90, 30);
         painelPrincipal.add(btnSair);
 
+        // Permitir ENTER para logar
+        getRootPane().setDefaultButton(btnEntrar);
+
         // --- 2. Action Listener: O que acontece quando os botões são clicados ---
 
         // Ação do Botão ENTRAR
@@ -96,64 +103,89 @@ public class TelaLogin extends JFrame {
         String loginDigitado = txtLogin.getText();
         String senhaDigitada = new String(txtSenha.getPassword());
 
-        // Prepara a consulta SQL
-        // Usamos 'PreparedStatement' (com '?') para evitar SQL Injection
+        // 2. Validar campos
+        if (loginDigitado.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "O campo 'Login' não pode estar vazio.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            txtLogin.requestFocus();
+            return;
+        }
+
+        if (senhaDigitada.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "O campo 'Senha' não pode estar vazio.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            txtSenha.requestFocus();
+            return;
+        }
+
+        // 3. Verificar se ainda há tentativas
+        if (tentativas >= LIMITE_TENTATIVAS) {
+            JOptionPane.showMessageDialog(this,
+                    "Número máximo de tentativas atingido. O sistema será encerrado.",
+                    "Acesso Bloqueado",
+                    JOptionPane.ERROR_MESSAGE);
+            System.exit(0);
+        }
+
+        // 4. Consultar no banco
         String sql = "SELECT * FROM usuarios WHERE login = ? AND senha = ?";
 
-        Connection conexao = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
+        try (Connection conexao = ConexaoMySQL.getConexao();
+             PreparedStatement pstmt = conexao.prepareStatement(sql)) {
 
-        try {
-            // Pega uma conexão do nosso arquivo ConexaoMySQL.java
+            pstmt.setString(1, loginDigitado);
+            pstmt.setString(2, senhaDigitada);
 
-            conexao = ConexaoMySQL.getConexao();
+            try (ResultSet rs = pstmt.executeQuery()) {
 
-            // Prepara a consulta
-            pstmt = conexao.prepareStatement(sql);
-            pstmt.setString(1, loginDigitado); // Substitui o primeiro '?' pelo login
-            pstmt.setString(2, senhaDigitada); // Substitui o segundo '?' pela senha
+                if (rs.next()) {
+                    String nomeUsuario = rs.getString("nome_completo");
+                    boolean primeiroAcesso = rs.getBoolean("primeiro_acesso");
 
-            // Executa a consulta
-            rs = pstmt.executeQuery();
+                    if (primeiroAcesso) {
+                        JOptionPane.showMessageDialog(this,
+                                "Olá, " + nomeUsuario + "!\nEsse é seu primeiro acesso.\nPor favor, altere sua senha.",
+                                "Primeiro Acesso", JOptionPane.INFORMATION_MESSAGE);
 
-            // Verifica se o banco de dados retornou algum resultado
-            if (rs.next()) {
-                // --- LOGIN BEM-SUCEDIDO ---
-                // Pega o nome do usuário no banco
-                String nomeUsuario = rs.getString("nome_completo");
+                        TelaTrocaSenha telaTroca = new TelaTrocaSenha(rs.getInt("id_usuario"));
+                        telaTroca.setVisible(true);
+                        this.dispose();
+                    } else {
+                        JOptionPane.showMessageDialog(this,
+                                "Login bem-sucedido! Bem-vindo, " + nomeUsuario,
+                                "Sucesso", JOptionPane.INFORMATION_MESSAGE);
 
-                JOptionPane.showMessageDialog(this, "Login bem-sucedido! Bem-vindo, " + nomeUsuario);
+                        TelaGestaoMaquinas TelaMaquinas = new TelaGestaoMaquinas();
+                        TelaMaquinas.setVisible(true);
+                        this.dispose();
+                    }
+                } else {
+                    // Falha
+                    tentativas++;
+                    int tentativasRestantes = LIMITE_TENTATIVAS - tentativas;
 
-                // Abre a Tela 2 (Gestão de Máquinas)
-                // (Esta tela ainda não criamos, mas já deixamos a chamada aqui)
-                TelaGestaoMaquinas TelaMaquinas = new TelaGestaoMaquinas();
-                TelaMaquinas.setVisible(true);
-
-                // Fecha esta tela de login
-                this.dispose();
-
-            } else {
-                // --- LOGIN FALHOU ---
-                JOptionPane.showMessageDialog(this, "Login ou senha inválidos.", "Erro de Login", JOptionPane.ERROR_MESSAGE);
+                    if (tentativasRestantes > 0) {
+                        JOptionPane.showMessageDialog(this,
+                                "Usuário ou senha inválidos.\nTentativas restantes: " + tentativasRestantes,
+                                "Erro de Login",
+                                JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(this,
+                                "Número máximo de tentativas atingido.\nO sistema será encerrado.",
+                                "Acesso Bloqueado",
+                                JOptionPane.ERROR_MESSAGE);
+                        System.exit(0);
+                    }
+                }
             }
 
         } catch (SQLException ex) {
-            // Erro ao tentar conectar ou executar a consulta
-            JOptionPane.showMessageDialog(this, "Erro ao conectar ao banco de dados: " + ex.getMessage(), "Erro de Conexão", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Erro ao conectar ao banco de dados:\n" + ex.getMessage(),
+                    "Erro de Conexão",
+                    JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
-        } finally {
-            // --- 4. Fecha todos os recursos (conexão, statement, resultset) ---
-            // Isso é MUITO importante para não consumir recursos do banco
-            try {
-                if (rs != null) rs.close();
-                if (pstmt != null) pstmt.close();
-                if (conexao != null) conexao.close();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
         }
     }
+
 
 
     // --- 5. Método 'main' para executar esta tela ---
