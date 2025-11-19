@@ -1,4 +1,5 @@
-import telas.TelaLogin;
+import com.formdev.flatlaf.FlatLightLaf;
+import view.TelaLogin;
 
 import javax.swing.*;
 
@@ -7,15 +8,23 @@ import javax.swing.*;
 public class Main {
 
     public static void main(String[] args) {
-        // Isso garante que a interface gráfica rode na "thread" correta
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                // 1. Cria a tela de login
-                TelaLogin telaDeLogin = new TelaLogin();
-                // 2. Torna a tela visível
-                telaDeLogin.setVisible(true);
-            }
+        // -----------------------------------------------------------
+        // 1️⃣ Aplica o Look and Feel moderno FlatLaf (tema claro)
+        //    Caso queira o tema escuro, troque para FlatDarkLaf.
+        // -----------------------------------------------------------
+        try {
+            FlatLightLaf.setup();  // Aplica o FlatLaf Light
+            // FlatDarkLaf.setup();  // (opção) Tema escuro
+        } catch (Exception ex) {
+            System.out.println("Não foi possível carregar o FlatLaf.");
+        }
+
+        // -----------------------------------------------------------
+        // 2️⃣ Abre a TelaLogin como primeira tela do sistema
+        // -----------------------------------------------------------
+        SwingUtilities.invokeLater(() -> {
+            TelaLogin login = new TelaLogin();
+            login.setVisible(true);
         });
     }
 }
