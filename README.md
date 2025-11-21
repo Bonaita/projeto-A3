@@ -1,60 +1,83 @@
-💻 Projeto A3 — Sistema de Gestão de Máquinas e Manutenções
+# 🏭 Sistema de Controle de Manutenção Preventiva — ODS 9
 
-Este projeto é uma aplicação desktop desenvolvida em Java (Swing) com integração ao banco de dados MySQL.
-O sistema permite o cadastro, consulta e gerenciamento de máquinas e manutenções, além de autenticação de usuários via tela de login.
+Este projeto é uma aplicação **desktop em Java (Swing)** desenvolvida como parte do tema da **ODS 9 — Indústria, Inovação e Infraestrutura**.  
+O sistema tem como objetivo auxiliar empresas e indústrias no **controle de manutenções preventivas de máquinas**, aumentando a **eficiência, produtividade e sustentabilidade** dos processos industriais.
 
-📋 Sumário
+---
 
-Estrutura do Projeto
+## 📋 Sumário
 
-Tecnologias Utilizadas
+- [Objetivo — ODS 9](#-objetivo---ods-9)
+- [Estrutura do Projeto](#-estrutura-do-projeto)
+- [Tecnologias Utilizadas](#-tecnologias-utilizadas)
+- [Banco de Dados — `db_manutencao`](#-banco-de-dados---db_manutencao)
+- [Configuração da Conexão com o MySQL](#-configuração-da-conexão-com-o-mysql)
+- [Como adicionar o driver JDBC no IntelliJ IDEA](#-como-adicionar-o-driver-jdbc-no-intellij-idea)
+- [Execução do Projeto](#-execução-do-projeto)
+- [Tela de Login](#-tela-de-login)
+- [Funcionalidades](#-funcionalidades)
+- [Classe Principal](#-classe-principal)
+- [Erros Comuns e Soluções](#-erros-comuns-e-soluções)
+- [Inserindo Usuário Inicial (para teste)](#-inserindo-usuário-inicial-para-teste)
+- [Autor](#-autor)
+- [Licença](#-licença)
+- [Justificativa e Impacto](#-justificativa-e-impacto)
 
-Banco de Dados
+---
 
-Configuração da Conexão
+## 🌍 Objetivo — ODS 9
 
-Dependência Maven
+> **ODS 9 - Indústria, Inovação e Infraestrutura**  
+> “Construir infraestruturas resilientes, promover a industrialização inclusiva e sustentável e fomentar a inovação.”
 
-Instalação e Execução
+Este projeto contribui com a ODS 9 ao propor uma solução tecnológica que **reduz falhas não planejadas em equipamentos**, melhora a **gestão de ativos** e incentiva o uso de **ferramentas digitais** na indústria.
 
-Erros Comuns e Soluções
+---
 
-Capturas de Tela (opcional)
+## 🧭 Estrutura do Projeto
 
-Autor
-
-Licença
-
-🗂️ Estrutura do Projeto
+```
 projeto-A3/
  ├─ src/
- │   ├─ conexao/
- │   │   └─ ConexaoMySQL.java          # Classe de conexão com o banco
- │   └─ telas/
- │       ├─ TelaLogin.java             # Tela de login
- │       ├─ TelaGestaoMaquinas.java    # Tela de gerenciamento de máquinas
- │       └─ TelaGestaoManutencoes.java # Tela de gerenciamento de manutenções
- │
- ├─ pom.xml                            # Arquivo Maven (dependências)
- ├─ README.md                          # Este documento
- └─ .gitignore
+ │   └─ com/bonaita/
+ │       ├─ ConexaoMySQL.java
+ │       ├─ TelaLogin.java
+ │       ├─ TelaGestaoMaquinas.java
+ │       ├─ TelaGestaoManutencoes.java
+ │       └─ Main.java
+ ├─ .gitignore
+ └─ README.md
+```
 
-⚙️ Tecnologias Utilizadas
-Tecnologia	Função
-Java 17+	Linguagem principal
-Swing (javax.swing)	Interface gráfica
-MySQL 8+	Banco de dados relacional
-JDBC (Java Database Connectivity)	Conexão entre Java e MySQL
-Maven	Gerenciamento de dependências
-🗄️ Banco de Dados
+**Arquivos principais (pacote `com.bonaita`):**
 
-Crie um banco de dados no MySQL:
+- `ConexaoMySQL.java` — classe de conexão com o banco MySQL.
+- `TelaLogin.java` — JFrame de login; valida usuário na tabela `usuarios`.
+- `TelaGestaoMaquinas.java` — CRUD de máquinas (cadastrar, listar, editar, excluir).
+- `TelaGestaoManutencoes.java` — CRUD de manutenções para uma máquina específica.
+- `Main.java` — ponto de entrada que inicia a `TelaLogin`.
 
-CREATE DATABASE projeto_a3;
-USE projeto_a3;
+---
 
+## ⚙️ Tecnologias Utilizadas
 
-Crie as tabelas utilizadas:
+| Tecnologia | Finalidade |
+|---|---|
+| **Java 17+** | Linguagem principal |
+| **Swing (javax.swing)** | Interface gráfica (JFrame, JTable, etc.) |
+| **MySQL 8+** | Banco de dados local |
+| **JDBC** | Comunicação Java ↔ MySQL |
+| **IntelliJ IDEA** | IDE utilizada (projeto sem Maven) |
+
+---
+
+## 🗄️ Banco de Dados — `db_manutencao`
+
+Execute os comandos abaixo no MySQL local para criar o banco e as tabelas:
+
+```sql
+CREATE DATABASE db_manutencao;
+USE db_manutencao;
 
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,17 +95,21 @@ CREATE TABLE maquinas (
 
 CREATE TABLE manutencoes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    id_maquina INT,
+    id_maquina INT NOT NULL,
     data DATE,
     descricao VARCHAR(255),
     FOREIGN KEY (id_maquina) REFERENCES maquinas(id)
 );
+```
 
-🔌 Configuração da Conexão
+---
 
-Edite o arquivo src/conexao/ConexaoMySQL.java conforme seu ambiente local:
+## 🔌 Configuração da Conexão com o MySQL
 
-package conexao;
+Edite `src/com/bonaita/ConexaoMySQL.java` com suas credenciais locais:
+
+```java
+package com.bonaita;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -90,76 +117,137 @@ import java.sql.SQLException;
 
 public class ConexaoMySQL {
 
-    private static final String URL = "jdbc:mysql://localhost:3306/projeto_a3?serverTimezone=UTC";
+    private static final String URL = "jdbc:mysql://localhost:3306/db_manutencao?serverTimezone=UTC";
     private static final String USER = "root";
     private static final String PASSWORD = "sua_senha";
 
     public static Connection getConexao() throws SQLException, ClassNotFoundException {
-        Class.forName("com.mysql.cj.jdbc.Driver"); // Carrega o driver
+        Class.forName("com.mysql.cj.jdbc.Driver"); // Carrega o driver JDBC
         return DriverManager.getConnection(URL, USER, PASSWORD);
     }
 }
+```
 
-📦 Dependência Maven
+---
 
-Verifique se o MySQL Connector está declarado no pom.xml:
+## 📦 Como adicionar o driver JDBC no IntelliJ IDEA
 
-<dependencies>
-    <dependency>
-        <groupId>mysql</groupId>
-        <artifactId>mysql-connector-j</artifactId>
-        <version>8.0.33</version>
-    </dependency>
-</dependencies>
+> **(Projeto sem Maven — adicionar JAR manualmente)**
 
+1. Baixe o driver MySQL Connector/J:  
+   https://dev.mysql.com/downloads/connector/j/
 
-Depois, atualize o projeto no IntelliJ:
+2. Extraia o ZIP e localize o arquivo `.jar` (ex: `mysql-connector-j-8.0.33.jar`).
 
-Maven → Reload Project
-ou no terminal:
+3. No IntelliJ:
+    - `File` → `Project Structure` (ou pressione `Ctrl+Alt+Shift+S`)
+    - Selecione `Modules` → aba `Dependencies`
+    - Clique no botão `+` → `JARs or directories`
+    - Selecione o `.jar` do connector
+    - Clique em `Apply` → `OK`
 
-mvn clean install
+4. Recompile o projeto: `Build` → `Rebuild Project`
 
-🚀 Instalação e Execução
-🔧 Pré-requisitos
+---
 
-Java JDK 17+ instalado
+## 🚀 Execução do Projeto
 
-MySQL Server rodando localmente
+**Pré-requisitos:**
+- Java JDK 17+ instalado
+- MySQL rodando localmente (com o banco `db_manutencao` criado)
+- IntelliJ IDEA configurado com o JAR do connector
 
-IntelliJ IDEA ou VSCode com Extensão Java
+**Passos para execução:**
 
-Driver MySQL Connector (automático via Maven)
+1. Abra o projeto no IntelliJ.
+2. Verifique/edite `ConexaoMySQL.java` com usuário/senha do MySQL.
+3. Crie usuário de teste (veja abaixo).
+4. Execute a classe `Main.java`:
+    - Clique com o botão direito > `Run 'Main.main()'`
+    - Ou crie uma *Run Configuration* para `com.bonaita.Main`.
 
-▶️ Executando o projeto
+A aplicação abrirá a **Tela de Login**; ao autenticar, você acessa a **TelaGestaoMaquinas**.
 
-Clone o repositório:
+---
 
-git clone https://github.com/SEU_USUARIO/projeto-A3.git
+## 🔐 Tela de Login
 
+A validação do login (no `TelaLogin.java`) deve usar `PreparedStatement` com a query:
 
-Abra o projeto no IntelliJ.
+```sql
+SELECT * FROM usuarios WHERE login = ? AND senha = ?;
+```
 
-Certifique-se que o Maven sincronizou corretamente.
+---
 
-Execute a classe principal de login:
+## ⚙️ Funcionalidades
 
-src/telas/TelaLogin.java
+### 🧰 Gestão de Máquinas (`TelaGestaoMaquinas.java`)
+- Cadastrar máquina (nome, modelo, status)
+- Listar máquinas em tabela (JTable)
+- Editar registro selecionado
+- Excluir registro
 
+### 🧾 Gestão de Manutenções (`TelaGestaoManutencoes.java`)
+- Registrar manutenção preventiva vinculada a uma máquina
+- Listar histórico de manutenções da máquina
+- Editar/Excluir registros de manutenção
 
-Após logar, acesse as demais telas pelo menu da aplicação.
+---
 
-🧠 Erros Comuns e Soluções
-Erro	Causa	Solução
-ClassNotFoundException: com.mysql.cj.jdbc.Driver	Driver JDBC ausente	Verifique dependência Maven ou adicione manualmente o mysql-connector-j.jar
-Cannot invoke prepareStatement() because "conexao" is null	Conexão falhou	Cheque URL, usuário e senha no ConexaoMySQL.java
-Cannot find symbol variable ConexaoMySQL	Falta de import ou nome incorreto	Verifique import conexao.ConexaoMySQL; e se o nome do arquivo/classe começa com maiúscula
-Access denied for user 'root'@'localhost'	Senha incorreta ou sem permissão	Corrija credenciais no código ou ajuste permissões do usuário no MySQL
-No suitable driver found for jdbc:mysql://...	Driver não carregado	Use Class.forName("com.mysql.cj.jdbc.Driver") antes da conexão
+## 🧩 Classe Principal
 
-👨‍💻 Autores
+```java
+package com.bonaita;
 
-Ana Monteiro
-Bruno Bonaita dos Santos
-📅 Novembro de 2025
-🎓 Projeto acadêmico — Avaliação A3
+public class Main {
+    public static void main(String[] args) {
+        new TelaLogin(); // inicia a aplicação exibindo a tela de login
+    }
+}
+```
+
+---
+
+## 🧠 Erros Comuns e Soluções
+
+| Erro | Causa provável | Solução |
+|---:|---|---|
+| `ClassNotFoundException: com.mysql.cj.jdbc.Driver` | Driver JDBC não adicionado ao projeto | Baixe o connector JAR e adicione como dependência no IntelliJ |
+| `Cannot invoke prepareStatement() because "conexao" is null` | `getConexao()` falhou — `conexao` é nula | Verifique URL, usuário, senha; trate exceções e verifique retorno da conexão |
+| `Access denied for user 'root'@'localhost'` | Usuário/senha incorretos ou permissões | Corrija credenciais ou crie/ajuste usuário no MySQL |
+| `No suitable driver found for jdbc:mysql://...` | Driver não carregado | Confirme `Class.forName("com.mysql.cj.jdbc.Driver")` e presença do JAR no classpath |
+
+---
+
+## 🧪 Inserindo Usuário Inicial (para teste)
+
+```sql
+INSERT INTO usuarios (nome, login, senha)
+VALUES ('Administrador', 'admin', '1234');
+```
+
+---
+
+## 👨‍💻 Autor
+
+**Bruno Bonaita dos Santos**  
+📅 Novembro de 2025  
+🎓 Projeto acadêmico — Avaliação A3  
+💡 Tema: *ODS 9 — Indústria, Inovação e Infraestrutura*  
+📚 Sistema de Controle de Manutenção Preventiva
+
+---
+
+## 🪪 Licença
+
+Este projeto é de uso **educacional** e pode ser modificado livremente, desde que mantidos os créditos originais.
+
+**Licença sugerida:** MIT (opcional — adicione um `LICENSE` se desejar).
+
+---
+
+## 💡 Justificativa e Impacto
+
+> O sistema visa reduzir paradas não planejadas em processos industriais por meio de um controle simples e eficiente de manutenções preventivas.  
+> Ao facilitar o agendamento e o registro das intervenções em máquinas, o projeto contribui para a **confiabilidade das infraestruturas industriais**, reduz custos com manutenção corretiva e apoia a transformação digital de pequenas e médias indústrias — tudo alinhado à **ODS 9**.
