@@ -1,375 +1,315 @@
 package view;
 
-import conexao.ConexaoMySQL;
-import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
-import org.jfree.chart.JFreeChart;
-import org.jfree.data.category.DefaultCategoryDataset;
-import org.jfree.data.general.DefaultPieDataset;
+import model.Usuario;
+import view.components.ShadowCard;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.InputStream;
 
+/**
+ * TelaPrincipal - versão final com:
+ * - Menu Conta (Perfil, Trocar Senha, Sair) para todos
+ * - Menu Administração (apenas para ADMIN)
+ * - Reorganização automática: 3 cards para ADMIN, 2 cards centralizados para USER
+ * - Ícones SVG via FlatSVGIcon quando disponível, com fallback
+ */
 public class TelaPrincipal extends JFrame {
 
-    private final String usuarioLogado;
-    private final String role;
+    private Usuario usuario;
 
-    private JLabel lblTotalMaquinas;
-    private JLabel lblTotalManutencoes;
-    private JLabel lblManutencoesAgendadas;
-    private JLabel lblManutencoesConcluidas;
+    // === CONSTRUTOR COM USUÁRIO ===
+    public TelaPrincipal(Usuario usuario) {
+        this.usuario = usuario;
 
-    private JPanel chartPiePanelContainer;
-    private JPanel chartBarPanelContainer;
+        setTitle("Painel Principal - Bem-vindo" + (usuario != null && usuario.getNomeCompleto() != null ? ", " + usuario.getNomeCompleto() : ""));
+        initLookAndFeel();
+        initUI(usuario != null && usuario.getNomeCompleto() != null ? "Bem-vindo, " + usuario.getNomeCompleto() : "Bem-vindo ao sistema");
 
-    private JTable tabelaUltimas;
-    private DefaultTableModel ultimasModel;
+        // aplicar o menu *depois* de setContentPane (evita sumir com alguns LAFs)
+        setJMenuBar(criarMenuSuperior());
 
-    /** CONSTRUTOR CORRETO */
-    public TelaPrincipal(String usuarioLogado, String role) {
-        this.usuarioLogado = usuarioLogado;
-        this.role = role;
-
-        setTitle("Sistema de Gestão - Dashboard");
-        setSize(1200, 800);
+        setSize(1200, 700);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        setLayout(new BorderLayout());
-
-        initTopBar();
-        initSidebar();
-        initMainDashboard();
-
-        refreshDashboardData();
     }
 
-    // =====================================================================================
-    // 1. TOP BAR
-    // =====================================================================================
-    private void initTopBar() {
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+    // === CONSTRUTOR PADRÃO ===
+    public TelaPrincipal() {
+        this(null);
+    }
 
-        JLabel titulo = new JLabel("Painel Administrativo");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        topBar.add(titulo, BorderLayout.WEST);
+    // Look & Feel (tente FlatLaf)
+    private void initLookAndFeel() {
+        try {
+            UIManager.setLookAndFeel("com.formdev.flatlaf.FlatIntelliJLaf");
+        } catch (Exception ignored) {}
+    }
 
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        JLabel lblUser = new JLabel("Usuário: " + usuarioLogado);
+    /**
+     * Cria e retorna o JMenuBar. Adiciona menu Administração apenas quando usuario.isAdmin() == true.
+     */
+    private JMenuBar criarMenuSuperior() {
 
-        JButton btnLogout = new JButton("Logout");
-        JButton btnSair = new JButton("Sair");
+        JMenuBar menuBar = new JMenuBar();
+        menuBar.setBackground(new Color(245, 245, 245));
 
-        btnLogout.addActionListener(e -> {
+        // ===== MENU CONTA (visível para todos) =====
+        JMenu menuConta = new JMenu("Conta");
+        menuConta.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+
+        JMenuItem itemPerfil = new JMenuItem("Perfil do Usuário");
+        JMenuItem itemTrocarSenha = new JMenuItem("Trocar Senha");
+        JMenuItem itemLogout = new JMenuItem("Sair");
+
+        itemPerfil.addActionListener(e -> {
+            // abre tela de perfil (presumindo que existe)
+            try {
+                new TelaPerfilUsuario(usuario).setVisible(true);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Tela de perfil não encontrada.", "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        itemTrocarSenha.addActionListener(e -> {
+            try {
+                new TelaTrocaSenha(usuario).setVisible(true);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Tela de troca de senha não encontrada.", "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        itemLogout.addActionListener(e -> {
+            // logoff: fecha painel e volta para login
             new TelaLogin().setVisible(true);
             dispose();
         });
 
-        btnSair.addActionListener(e -> System.exit(0));
+        menuConta.add(itemPerfil);
+        menuConta.add(itemTrocarSenha);
+        menuConta.addSeparator();
+        menuConta.add(itemLogout);
 
-        right.add(lblUser);
-        right.add(btnLogout);
-        right.add(btnSair);
+        menuBar.add(menuConta);
 
-        topBar.add(right, BorderLayout.EAST);
-        add(topBar, BorderLayout.NORTH);
-    }
+        // ===== MENU ADMIN (apenas admins) =====
+        if (usuario != null && usuario.isAdmin()) {
+            JMenu adminMenu = new JMenu("Administração");
+            adminMenu.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
-    // =====================================================================================
-    // 2. SIDEBAR
-    // =====================================================================================
-    private void initSidebar() {
-        JPanel sidebar = new JPanel();
-        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setPreferredSize(new Dimension(220, getHeight()));
-        sidebar.setBorder(BorderFactory.createEmptyBorder(16, 12, 12, 12));
+            JMenuItem itemUsuarios = new JMenuItem("Gerenciar Usuários");
+            JMenuItem itemLogs = new JMenuItem("Logs do Sistema");
+            JMenuItem itemPermissoes = new JMenuItem("Permissões");
 
-        JLabel menuTitle = new JLabel("Menu");
-        menuTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        sidebar.add(menuTitle);
-        sidebar.add(Box.createVerticalStrut(12));
+            itemUsuarios.addActionListener(e -> {
+                try {
+                    new TelaAdminUsuarios(usuario).setVisible(true);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Tela de usuários não encontrada.", "Erro", JOptionPane.ERROR_MESSAGE);
+                }
+            });
 
-        JButton btnDashboard = createMenuButton("Dashboard");
-        JButton btnMaquinas = createMenuButton("Gestão de Máquinas");
-        JButton btnManutencoes = createMenuButton("Gestão de Manutenções");
-        JButton btnTrocarSenha = createMenuButton("Trocar Senha");
+            itemLogs.addActionListener(e -> {
+                new TelaAuditoria(usuario).setVisible(true);
+            });
 
-        sidebar.add(btnDashboard);
-        sidebar.add(Box.createVerticalStrut(8));
-        sidebar.add(btnMaquinas);
-        sidebar.add(Box.createVerticalStrut(8));
-        sidebar.add(btnManutencoes);
-        sidebar.add(Box.createVerticalStrut(8));
-        sidebar.add(btnTrocarSenha);
-        sidebar.add(Box.createVerticalStrut(8));
+            itemPermissoes.addActionListener(e -> {
+                JOptionPane.showMessageDialog(this, "Gerenciar permissões (implementar).");
+            });
 
-        // AUDITORIA — somente ADMIN
-        if ("ADMIN".equalsIgnoreCase(role)) {
-            JButton btnAuditoria = createMenuButton("Auditoria do Sistema");
-            btnAuditoria.addActionListener(e -> new TelaAuditoria(usuarioLogado, role).setVisible(true));
-            sidebar.add(btnAuditoria);
-            sidebar.add(Box.createVerticalStrut(8));
+            adminMenu.add(itemUsuarios);
+            adminMenu.add(itemLogs);
+            adminMenu.add(itemPermissoes);
+
+            menuBar.add(adminMenu);
         }
 
-        sidebar.add(Box.createVerticalGlue());
+        return menuBar;
+    }
 
-        // AÇÕES (corrigidas)
-        btnMaquinas.addActionListener(e -> {
-            new TelaGestaoMaquinas(usuarioLogado, role).setVisible(true);
-            dispose();
+    /**
+     * Inicializa a UI principal (conteúdo). Recebe o texto do subtítulo.
+     * Este método chama setContentPane(root) internamente.
+     */
+    private void initUI(String subtitleText) {
+
+        // ROOT
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(new Color(242, 242, 242));
+        root.setBorder(new EmptyBorder(8, 8, 8, 8));
+
+        // TOP BAR (título + subtítulo)
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.setBorder(new EmptyBorder(20, 20, 10, 20));
+
+        JLabel title = new JLabel("Painel Principal");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        title.setForeground(new Color(0, 120, 215));
+
+        JLabel subtitle = new JLabel(subtitleText);
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        subtitle.setForeground(new Color(80, 80, 80));
+
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
+        titleBox.add(title);
+        titleBox.add(Box.createRigidArea(new Dimension(0, 5)));
+        titleBox.add(subtitle);
+
+        top.add(titleBox, BorderLayout.WEST);
+        root.add(top, BorderLayout.NORTH);
+
+        // CENTER: painel com cards. Vamos decidir colunas dependendo do role.
+        JPanel center = new JPanel(new GridBagLayout());
+        center.setOpaque(false);
+        center.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        // carregue ícones (com fallback)
+        JComponent iconeMaquinas = loadIconSafe("view/icons/maquinas.svg", 80, 80);
+        JComponent iconeManutencoes = loadIconSafe("view/icons/manutencoes.svg", 80, 80);
+        JComponent iconeUsuarios = loadIconSafe("view/icons/users.svg", 80, 80);
+
+        // cria cards
+        ShadowCard card1 = new ShadowCard("Máquinas", "Gerenciar todas as máquinas", iconeMaquinas);
+        ShadowCard card2 = new ShadowCard("Manutenções", "Gerenciar serviços e registros", iconeManutencoes);
+        ShadowCard card3 = new ShadowCard("Usuários", "Controle administrativo", iconeUsuarios);
+
+        // eventos (passando usuario)
+        card1.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                new TelaGestaoMaquinas(usuario).setVisible(true);
+            }
         });
 
-        btnManutencoes.addActionListener(e -> JOptionPane.showMessageDialog(this,
-                "Abra Gestão de Máquinas e selecione uma máquina para ver manutenções."));
-
-        btnTrocarSenha.addActionListener(e -> {
-            new TelaTrocaSenha(usuarioLogado, role).setVisible(true);
-            dispose();
+        card2.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                new TelaGestaoManutencoes(usuario).setVisible(true);
+            }
         });
 
-        add(sidebar, BorderLayout.WEST);
-    }
-
-    private JButton createMenuButton(String text) {
-        JButton b = new JButton(text);
-        b.setAlignmentX(Component.LEFT_ALIGNMENT);
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-        return b;
-    }
-
-    // =====================================================================================
-    // 3. MAIN DASHBOARD
-    // =====================================================================================
-    private void initMainDashboard() {
-
-        JPanel main = new JPanel(new BorderLayout(12, 12));
-        main.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-
-        // Cards
-        JPanel cardsPanel = new JPanel(new GridLayout(1, 4, 12, 12));
-
-        lblTotalMaquinas = createCard("Máquinas Cadastradas", "0", new Color(33,150,243));
-        lblTotalManutencoes = createCard("Manutenções Totais", "0", new Color(255,152,0));
-        lblManutencoesAgendadas = createCard("Agendadas", "0", new Color(76,175,80));
-        lblManutencoesConcluidas = createCard("Concluídas", "0", new Color(156,39,176));
-
-        cardsPanel.add(wrapCard(lblTotalMaquinas));
-        cardsPanel.add(wrapCard(lblTotalManutencoes));
-        cardsPanel.add(wrapCard(lblManutencoesAgendadas));
-        cardsPanel.add(wrapCard(lblManutencoesConcluidas));
-
-        main.add(cardsPanel, BorderLayout.NORTH);
-
-        // Gráficos
-        JPanel charts = new JPanel(new GridLayout(1, 2, 12, 12));
-
-        chartPiePanelContainer = new JPanel(new BorderLayout());
-        chartPiePanelContainer.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-
-        chartBarPanelContainer = new JPanel(new BorderLayout());
-        chartBarPanelContainer.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-
-        charts.add(chartPiePanelContainer);
-        charts.add(chartBarPanelContainer);
-
-        main.add(charts, BorderLayout.CENTER);
-
-        // Últimas manutenções
-        ultimasModel = new DefaultTableModel(
-                new String[]{"ID", "Data", "Tipo", "Status", "Obs"}, 0
-        );
-        tabelaUltimas = new JTable(ultimasModel);
-
-        JScrollPane sp = new JScrollPane(tabelaUltimas);
-
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.setBorder(BorderFactory.createTitledBorder("Últimas 5 Manutenções"));
-        bottom.add(sp, BorderLayout.CENTER);
-
-        main.add(bottom, BorderLayout.SOUTH);
-
-        add(main, BorderLayout.CENTER);
-    }
-
-    private JLabel createCard(String title, String value, Color color) {
-        JLabel label = new JLabel("<html><center>" +
-                "<div style='font-size:12px;color:#444'>" + title + "</div>" +
-                "<div style='font-size:28px;color:" + toHex(color) + "'><b>" + value + "</b></div>" +
-                "</center></html>");
-        label.setHorizontalAlignment(SwingConstants.CENTER);
-        return label;
-    }
-
-    private JPanel wrapCard(JLabel label) {
-        JPanel p = new JPanel(new BorderLayout());
-        p.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        p.add(label, BorderLayout.CENTER);
-        return p;
-    }
-
-    private String toHex(Color c) {
-        return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
-    }
-
-    // =====================================================================================
-    // 4. CARREGAMENTO ASSÍNCRONO
-    // =====================================================================================
-    private void refreshDashboardData() {
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-
-            int totalMaquinas;
-            int totalManut;
-            int agendadas;
-            int concluidas;
-
-            Map<String, Integer> porTipo = new HashMap<>();
-            Map<String, Integer> porStatus = new HashMap<>();
-
-            @Override
-            protected Void doInBackground() {
-
-                try (Connection c = ConexaoMySQL.getConexao()) {
-
-                    totalMaquinas = getInt(c, "SELECT COUNT(*) FROM maquinas");
-                    totalManut = getInt(c, "SELECT COUNT(*) FROM manutencoes");
-                    agendadas = getInt(c, "SELECT COUNT(*) FROM manutencoes WHERE status = 'Agendada'");
-                    concluidas = getInt(c, "SELECT COUNT(*) FROM manutencoes WHERE status = 'Concluída'");
-
-                    // Tipo
-                    PreparedStatement psTipo = c.prepareStatement(
-                            "SELECT tipo_manutencao, COUNT(*) FROM manutencoes GROUP BY tipo_manutencao"
-                    );
-                    ResultSet rsTipo = psTipo.executeQuery();
-                    while (rsTipo.next()) {
-                        porTipo.put(rsTipo.getString(1), rsTipo.getInt(2));
-                    }
-
-                    // Status
-                    PreparedStatement psStatus = c.prepareStatement(
-                            "SELECT status, COUNT(*) FROM manutencoes GROUP BY status"
-                    );
-                    ResultSet rsStatus = psStatus.executeQuery();
-                    while (rsStatus.next()) {
-                        porStatus.put(rsStatus.getString(1), rsStatus.getInt(2));
-                    }
-
-                    // Últimas
-                    ultimasModel.setRowCount(0);
-                    PreparedStatement psUltimas = c.prepareStatement(
-                            "SELECT id_manutencao, data_agendada, tipo_manutencao, status, observacoes " +
-                                    "FROM manutencoes ORDER BY data_agendada DESC LIMIT 5"
-                    );
-                    ResultSet rsUltimas = psUltimas.executeQuery();
-                    while (rsUltimas.next()) {
-                        ultimasModel.addRow(new Object[]{
-                                rsUltimas.getInt(1),
-                                rsUltimas.getString(2),
-                                rsUltimas.getString(3),
-                                rsUltimas.getString(4),
-                                rsUltimas.getString(5)
-                        });
-                    }
-
-                } catch (Exception e) {
-                    e.printStackTrace();
+        card3.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                // somente admins devem acessar; caso um USER consiga clicar, verificamos novamente:
+                if (usuario != null && usuario.isAdmin()) {
+                    new TelaAdminUsuarios(usuario).setVisible(true);
+                } else {
+                    JOptionPane.showMessageDialog(TelaPrincipal.this, "Acesso negado. Você não tem permissão para acessar esta área.", "Acesso negado", JOptionPane.WARNING_MESSAGE);
                 }
-
-                return null;
             }
+        });
 
-            @Override
-            protected void done() {
-                lblTotalMaquinas.setText(createCardHtml("Máquinas Cadastradas", ""+totalMaquinas, "#2196f3"));
-                lblTotalManutencoes.setText(createCardHtml("Manutenções Totais", ""+totalManut, "#ff9800"));
-                lblManutencoesAgendadas.setText(createCardHtml("Manutenções Agendadas", ""+agendadas, "#4caf50"));
-                lblManutencoesConcluidas.setText(createCardHtml("Manutenções Concluídas", ""+concluidas, "#9c27b0"));
+        // decide layout: ADMIN -> 3 colunas; USER -> 2 colunas centralizados
+        boolean isAdmin = usuario != null && usuario.isAdmin();
 
-                renderPieChart(porTipo);
-                renderBarChart(porStatus);
-            }
-        };
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(20, 20, 20, 20);
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1;
+        gbc.weighty = 1;
 
-        worker.execute();
+        if (isAdmin) {
+            // 3 colunas (0,1,2)
+            gbc.gridx = 0;
+            center.add(card1, gbc);
+            gbc.gridx = 1;
+            center.add(card2, gbc);
+            gbc.gridx = 2;
+            center.add(card3, gbc);
+        } else {
+            // USER: apenas 2 cards, centralizados. Não adicionamos card3.
+            // Para centralizar usamos um panel interno com GridBagLayout e 3 colunas vazio-card-card-vazio
+            JPanel inner = new JPanel(new GridBagLayout());
+            inner.setOpaque(false);
+
+            GridBagConstraints ig = new GridBagConstraints();
+            ig.insets = new Insets(20, 20, 20, 20);
+            ig.fill = GridBagConstraints.BOTH;
+            ig.weightx = 1;
+            ig.weighty = 1;
+
+            // coluna 0: filler
+            ig.gridx = 0;
+            inner.add(Box.createHorizontalStrut(20), ig);
+
+            // coluna 1: card1
+            ig.gridx = 1;
+            inner.add(card1, ig);
+
+            // coluna 2: card2
+            ig.gridx = 2;
+            inner.add(card2, ig);
+
+            // coluna 3: filler
+            ig.gridx = 3;
+            inner.add(Box.createHorizontalStrut(20), ig);
+
+            // adiciona inner ao center, ajustando constraints para centralização
+            gbc.gridx = 0;
+            gbc.gridwidth = GridBagConstraints.REMAINDER;
+            center.add(inner, gbc);
+        }
+
+        root.add(center, BorderLayout.CENTER);
+
+        // FOOTER
+        JLabel footer = new JLabel("© " + java.time.Year.now().getValue() + " - Sistema de Gestão");
+        footer.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        footer.setForeground(new Color(110, 110, 110));
+        JPanel foot = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        foot.setOpaque(false);
+        foot.add(footer);
+        root.add(foot, BorderLayout.SOUTH);
+
+        // finalmente aplica o content pane
+        setContentPane(root);
     }
 
-    private int getInt(Connection c, String sql) throws SQLException {
-        PreparedStatement ps = c.prepareStatement(sql);
-        ResultSet rs = ps.executeQuery();
-        return rs.next() ? rs.getInt(1) : 0;
-    }
-
-    // =====================================================================================
-    // 5. GRÁFICOS
-    // =====================================================================================
-    private void renderPieChart(Map<String, Integer> porTipo) {
-        DefaultPieDataset dataset = new DefaultPieDataset();
-
-        if (porTipo.isEmpty()) dataset.setValue("Nenhum", 1);
-        else porTipo.forEach(dataset::setValue);
-
-        JFreeChart chart = ChartFactory.createPieChart(
-                "Manutenções por Tipo", dataset, true, true, false);
-
-        ChartPanel panel = new ChartPanel(chart);
-
-        chartPiePanelContainer.removeAll();
-        chartPiePanelContainer.add(panel, BorderLayout.CENTER);
-        chartPiePanelContainer.revalidate();
-        chartPiePanelContainer.repaint();
-    }
-
-    private void renderBarChart(Map<String, Integer> porStatus) {
-        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
-
-        if (porStatus.isEmpty())
-            dataset.addValue(0, "Status", "Nenhum");
-        else
-            porStatus.forEach((k, v) -> dataset.addValue(v, "Qtd", k));
-
-        JFreeChart chart = ChartFactory.createBarChart(
-                "Manutenções por Status",
-                "Status",
-                "Quantidade",
-                dataset
-        );
-
-        ChartPanel panel = new ChartPanel(chart);
-
-        chartBarPanelContainer.removeAll();
-        chartBarPanelContainer.add(panel, BorderLayout.CENTER);
-        chartBarPanelContainer.revalidate();
-        chartBarPanelContainer.repaint();
-    }
-
-    // =====================================================================================
-    // 6. HTML CARD HELPER
-    // =====================================================================================
-    private String createCardHtml(String title, String value, String hexColor) {
-        return "<html><center>"
-                + "<div style='font-size:12px;color:#444'>" + title + "</div>"
-                + "<div style='font-size:28px;color:" + hexColor + "'><b>" + value + "</b></div>"
-                + "</center></html>";
-    }
-
-    // =====================================================================================
-    // 7. MAIN DE TESTE — CORRIGIDO
-    // =====================================================================================
-    public static void main(String[] args) {
+    /**
+     * Tenta carregar SVG via FlatSVGIcon (se disponível no classpath) ou um PNG via ImageIO.
+     * Se tudo falhar, retorna JLabel com emoji como fallback.
+     *
+     * Para robustez, recomendamos colocar os SVGs em src/view/icons/ e usar nomes sem acento:
+     * view/icons/maquinas.svg, view/icons/manutencoes.svg, view/icons/users.svg
+     */
+    private JComponent loadIconSafe(String resourcePath, int w, int h) {
+        // 1) tenta FlatSVGIcon (se o flatlaf-extras estiver no classpath)
         try {
-            com.formdev.flatlaf.FlatLightLaf.setup();
-        } catch (Exception ignored) {}
+            Class<?> svgClass = Class.forName("com.formdev.flatlaf.extras.FlatSVGIcon");
+            java.lang.reflect.Constructor<?> ctor = svgClass.getConstructor(String.class, int.class, int.class);
+            Object svgIcon = ctor.newInstance(resourcePath, w, h);
+            return new JLabel((Icon) svgIcon);
+        } catch (Throwable ignored) {
+        }
 
-        SwingUtilities.invokeLater(() ->
-                new TelaPrincipal("usuario_exemplo", "ADMIN").setVisible(true)
-        );
+        // 2) tenta carregar PNG/JPG correspondente (mesmo nome)
+        try {
+            String altPath = "/" + resourcePath;
+            InputStream is = getClass().getResourceAsStream(altPath);
+            if (is != null) {
+                Image img = javax.imageio.ImageIO.read(is);
+                Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+                return new JLabel(new ImageIcon(scaled));
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 3) fallback: emoji pequeno
+        JLabel fallback = new JLabel("\uD83D\uDEE0"); // ícone de ferramenta
+        fallback.setFont(fallback.getFont().deriveFont((float) w - 20));
+        fallback.setHorizontalAlignment(SwingConstants.CENTER);
+        return fallback;
+    }
+
+    // Para quick test
+    public static void main(String[] args) {
+        // exemplo de teste
+        Usuario adminEx = new Usuario();
+        adminEx.setNomeCompleto("Administrador");
+        adminEx.setRole("ADMIN");
+
+        SwingUtilities.invokeLater(() -> new TelaPrincipal(adminEx).setVisible(true));
     }
 }

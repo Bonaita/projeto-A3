@@ -1,232 +1,199 @@
 package view;
 
-import conexao.ConexaoMySQL;
-import services.AuditoriaService;
+import controller.UsuarioController;
+import model.Usuario;
 import services.AuthService;
 
 import javax.swing.*;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 
-/**
- * TelaTrocaSenha com auditoria, BCrypt e suporte a ROLE (ADMIN / USER)
- */
 public class TelaTrocaSenha extends JFrame {
 
-    private int idUsuario;               // Usado no primeiro acesso
-    private String usuarioLogado;        // Nome do usuário
-    private boolean primeiroAcesso;      // Define comportamento ao salvar
-    private String role;                 // ADMIN ou USER
+    private final Usuario usuarioLogado;
+    private final AuthService authService = new AuthService();
+    private final UsuarioController controller = new UsuarioController();
 
-    private JPasswordField txtNovaSenha;
-    private JPasswordField txtConfirmarSenha;
+    public TelaTrocaSenha(Usuario usuario) {
+        this.usuarioLogado = usuario;
 
-    // ===============================================================
-    // ✔ Construtor 1: Primeiro Acesso
-    // ===============================================================
-    public TelaTrocaSenha(int idUsuario, String usuarioLogado, String role) {
-        this.idUsuario = idUsuario;
-        this.usuarioLogado = usuarioLogado;
-        this.role = role;
-        this.primeiroAcesso = true;
-        initUI();
-    }
-
-    // ===============================================================
-    // ✔ Construtor 2: Troca normal (vem da TelaPrincipal)
-    // ===============================================================
-    public TelaTrocaSenha(String usuarioLogado, String role) {
-        this.usuarioLogado = usuarioLogado;
-        this.role = role;
-        this.primeiroAcesso = false;
-        initUI();
-    }
-
-    // ===============================================================
-    // 🔧 Interface Moderna
-    // ===============================================================
-    private void initUI() {
-
-        setTitle("Trocar Senha");
-        setSize(600, 420);
+        setTitle("Alterar Senha");
+        setSize(420, 310);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setResizable(false);
 
-        setLayout(new BorderLayout());
+        // ===== ROOT =====
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(new Color(245, 245, 245));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        setContentPane(root);
 
-        // ------------------------------------------------------------
-        // 🔷 TopBar
-        // ------------------------------------------------------------
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+        // ===== CABEÇALHO =====
+        JLabel titulo = new JLabel("Alterar Senha");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titulo.setForeground(new Color(0, 120, 215));
 
-        JLabel titulo = new JLabel("Trocar Senha");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        topBar.add(titulo, BorderLayout.WEST);
+        JLabel subtitulo = new JLabel("Mantenha sua conta protegida");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitulo.setForeground(new Color(90, 90, 90));
 
-        JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.add(titulo);
+        header.add(Box.createRigidArea(new Dimension(0, 6)));
+        header.add(subtitulo);
 
-        JButton btnVoltar = new JButton("Voltar");
-        JButton btnPrincipal = new JButton("Tela Principal");
-        JButton btnLogout = new JButton("Logout");
-        JButton btnSair = new JButton("Sair");
+        root.add(header, BorderLayout.NORTH);
 
-        if (!primeiroAcesso) {
-            topButtons.add(btnVoltar);
-            topButtons.add(btnPrincipal);
-        }
+        // ===== CARD =====
+        JPanel card = new JPanel(new GridBagLayout());
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(20, 20, 20, 20)
+        ));
 
-        topButtons.add(btnLogout);
-        topButtons.add(btnSair);
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(10, 10, 10, 10);
+        c.fill = GridBagConstraints.HORIZONTAL;
 
-        topBar.add(topButtons, BorderLayout.EAST);
+        JLabel lblAtual = new JLabel("Senha atual:");
+        JLabel lblNova = new JLabel("Nova senha:");
+        JLabel lblConfirmar = new JLabel("Confirmar nova senha:");
 
-        add(topBar, BorderLayout.NORTH);
+        lblAtual.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblNova.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblConfirmar.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
-        // ------------------------------------------------------------
-        // Formulário
-        // ------------------------------------------------------------
-        JPanel mainPanel = new JPanel(new GridBagLayout());
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(30, 40, 30, 40));
+        JPasswordField txtAtual = criarCampoSenha();
+        JPasswordField txtNova = criarCampoSenha();
+        JPasswordField txtConfirmar = criarCampoSenha();
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(12, 12, 12, 12);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        // ==== Layout do Card ====
+        c.gridx = 0; c.gridy = 0; card.add(lblAtual, c);
+        c.gridy = 1; card.add(txtAtual, c);
 
-        // Nova senha
-        gbc.gridx = 0; gbc.gridy = 0;
-        mainPanel.add(new JLabel("Nova Senha:"), gbc);
+        c.gridy = 2; card.add(lblNova, c);
+        c.gridy = 3; card.add(txtNova, c);
 
-        gbc.gridx = 1;
-        txtNovaSenha = new JPasswordField();
-        txtNovaSenha.setPreferredSize(new Dimension(250, 30));
-        mainPanel.add(txtNovaSenha, gbc);
+        c.gridy = 4; card.add(lblConfirmar, c);
+        c.gridy = 5; card.add(txtConfirmar, c);
 
-        // Confirmar senha
-        gbc.gridx = 0; gbc.gridy = 1;
-        mainPanel.add(new JLabel("Confirmar Senha:"), gbc);
+        root.add(card, BorderLayout.CENTER);
 
-        gbc.gridx = 1;
-        txtConfirmarSenha = new JPasswordField();
-        txtConfirmarSenha.setPreferredSize(new Dimension(250, 30));
-        mainPanel.add(txtConfirmarSenha, gbc);
+        // ===== BOTÕES =====
+        JButton btnSalvar = criarBotaoAzul("Salvar");
+        JButton btnFechar = criarBotaoCinza("Cancelar");
 
-        // Botão salvar
-        gbc.gridx = 1; gbc.gridy = 2; gbc.anchor = GridBagConstraints.CENTER;
-        JButton btnSalvar = new JButton("Salvar Senha");
-        btnSalvar.setPreferredSize(new Dimension(180, 40));
-        mainPanel.add(btnSalvar, gbc);
+        JPanel botoes = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        botoes.setOpaque(false);
+        botoes.add(btnSalvar);
+        botoes.add(btnFechar);
 
-        add(mainPanel, BorderLayout.CENTER);
+        root.add(botoes, BorderLayout.SOUTH);
 
-        // ------------------------------------------------------------
-        // AÇÕES
-        // ------------------------------------------------------------
-        btnSalvar.addActionListener(e -> trocarSenha());
+        // ===== AÇÕES =====
+        btnSalvar.addActionListener(e -> {
+            String atual = new String(txtAtual.getPassword());
+            String nova = new String(txtNova.getPassword());
+            String confirmar = new String(txtConfirmar.getPassword());
 
-        btnVoltar.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
-
-        btnPrincipal.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
-
-        btnLogout.addActionListener(e -> {
-            new TelaLogin().setVisible(true);
-            dispose();
-        });
-
-        btnSair.addActionListener(e -> System.exit(0));
-    }
-
-    // ===============================================================
-    // 🔐 Lógica da troca de senha
-    // ===============================================================
-    private void trocarSenha() {
-
-        String nova = new String(txtNovaSenha.getPassword()).trim();
-        String confirmar = new String(txtConfirmarSenha.getPassword()).trim();
-
-        if (nova.isEmpty() || confirmar.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Preencha todos os campos.",
-                    "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        if (!nova.equals(confirmar)) {
-            JOptionPane.showMessageDialog(this, "As senhas não coincidem.",
-                    "Erro", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        String sql = "UPDATE usuarios SET senha = ?, primeiro_acesso = FALSE WHERE id_usuario = ?";
-
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            int idReal = primeiroAcesso
-                    ? idUsuario
-                    : buscarIdUsuario(usuarioLogado);
-
-            ps.setInt(2, idReal);
-
-            // Hash BCrypt
-            AuthService auth = new AuthService();
-            String hash = auth.gerarHash(nova);
-
-            ps.setString(1, hash);
-            ps.executeUpdate();
-
-            // Auditoria
-            new AuditoriaService().registrar(
-                    idReal,
-                    "PASSWORD_CHANGE",
-                    "Senha alterada pelo usuário: " + usuarioLogado
-            );
-
-            JOptionPane.showMessageDialog(this,
-                    "Senha alterada com sucesso!",
-                    "Sucesso",
-                    JOptionPane.INFORMATION_MESSAGE);
-
-            if (primeiroAcesso) {
-                new TelaLogin().setVisible(true);
-            } else {
-                new TelaPrincipal(usuarioLogado, role).setVisible(true);
+            // Validações
+            if (atual.isBlank() || nova.isBlank() || confirmar.isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                        "Preencha todos os campos.",
+                        "Atenção", JOptionPane.WARNING_MESSAGE);
+                return;
             }
 
-            dispose();
+            if (!nova.equals(confirmar)) {
+                JOptionPane.showMessageDialog(this,
+                        "As senhas informadas não conferem.",
+                        "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
 
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro ao alterar senha: " + e.getMessage(),
-                    "Erro",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+            try {
+                // Verificar senha atual
+                if (!authService.verificarSenha(atual, usuarioLogado.getSenhaHash())) {
+                    JOptionPane.showMessageDialog(this,
+                            "Senha atual incorreta.",
+                            "Erro", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // Atualizar senha no banco
+                usuarioLogado.setSenhaHash(authService.gerarHash(nova));
+                controller.atualizarSenha(usuarioLogado);
+
+                JOptionPane.showMessageDialog(this,
+                        "Senha atualizada com sucesso!",
+                        "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                dispose();
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Erro ao trocar senha: " + ex.getMessage(),
+                        "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        btnFechar.addActionListener(e -> dispose());
     }
 
-    // ===============================================================
-    // 🔧 Obtém ID pelo nome do usuário
-    // ===============================================================
-    private int buscarIdUsuario(String nome) throws SQLException {
 
-        String sql = "SELECT id_usuario FROM usuarios WHERE nome_completo = ? LIMIT 1";
+    // ===== COMPONENTES ESTILIZADOS =====
+    private JPasswordField criarCampoSenha() {
+        JPasswordField campo = new JPasswordField();
+        campo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        campo.setBackground(new Color(245, 245, 245));
+        campo.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+        return campo;
+    }
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+    private JButton criarBotaoAzul(String texto) {
+        JButton btn = new JButton(texto);
+        btn.setBackground(new Color(0, 120, 215));
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 18, 10, 18));
 
-            ps.setString(1, nome);
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(25, 140, 235));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(0, 120, 215));
+            }
+        });
 
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) return rs.getInt("id_usuario");
+        return btn;
+    }
 
-            throw new SQLException("Usuário não encontrado.");
-        }
+    private JButton criarBotaoCinza(String texto) {
+        JButton btn = new JButton(texto);
+        btn.setBackground(new Color(230, 230, 230));
+        btn.setForeground(Color.BLACK);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 16));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(210, 210, 210));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(230, 230, 230));
+            }
+        });
+
+        return btn;
     }
 }

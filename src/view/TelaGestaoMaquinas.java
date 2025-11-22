@@ -1,318 +1,260 @@
 package view;
 
-import conexao.ConexaoMySQL;
+import controller.MaquinaController;
+import model.Maquina;
+import model.Usuario;
+import security.Permission;
+import security.SecurityService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.List;
 
 public class TelaGestaoMaquinas extends JFrame {
 
-    private final String usuarioLogado;
-    private final String role;
+    private final Usuario usuario;
+    private final MaquinaController controller = new MaquinaController();
 
-    private int idMaquinaSelecionada = -1;
+    private JTable tabela;
+    private DefaultTableModel model;
 
-    private JTable tabelaMaquinas;
-    private DefaultTableModel tableModel;
+    public TelaGestaoMaquinas(Usuario usuario) {
+        this.usuario = usuario;
 
-    private JTextField txtNomeEquipamento;
-    private JTextField txtSetor;
-    private JTextField txtDataAquisicao;
-
-    public TelaGestaoMaquinas(String usuarioLogado, String role) {
-        this.usuarioLogado = usuarioLogado;
-        this.role = role;
-
-        setTitle("Gestão de Máquinas");
-        setSize(1100, 720);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
-
-        add(criarTopBar(), BorderLayout.NORTH);
-        add(criarTabela(), BorderLayout.CENTER);
-        add(criarFormulario(), BorderLayout.SOUTH);
-
-        carregarDadosTabela();
-    }
-
-    // =====================================================================
-    // 🔷 TOPBAR
-    // =====================================================================
-    private JPanel criarTopBar() {
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-
-        JLabel titulo = new JLabel("Gestão de Máquinas");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        topBar.add(titulo, BorderLayout.WEST);
-
-        JPanel botoes = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-
-        JButton btnVoltar = new JButton("Voltar");
-        JButton btnPrincipal = new JButton("Tela Principal");
-        JButton btnLogout = new JButton("Logout");
-        JButton btnSair = new JButton("Sair");
-
-        btnVoltar.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
+        SecurityService sec = new SecurityService();
+        if (!sec.roleHasPermission(usuario.getRole(), Permission.VIEW_MACHINES)) {
+            JOptionPane.showMessageDialog(null,
+                    "Você não tem permissão para acessar Gestão de Máquinas.",
+                    "Acesso Negado",
+                    JOptionPane.WARNING_MESSAGE);
             dispose();
-        });
-
-        btnPrincipal.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
-
-        btnLogout.addActionListener(e -> {
-            new TelaLogin().setVisible(true);
-            dispose();
-        });
-
-        btnSair.addActionListener(e -> System.exit(0));
-
-        botoes.add(btnVoltar);
-        botoes.add(btnPrincipal);
-        botoes.add(btnLogout);
-        botoes.add(btnSair);
-
-        topBar.add(botoes, BorderLayout.EAST);
-        return topBar;
-    }
-
-    // =====================================================================
-    // 🟦 TABELA
-    // =====================================================================
-    private JScrollPane criarTabela() {
-        String[] colunas = {"ID", "Nome Equipamento", "Setor", "Data Aquisição"};
-
-        tableModel = new DefaultTableModel(colunas, 0);
-        tabelaMaquinas = new JTable(tableModel);
-        tabelaMaquinas.setRowHeight(25);
-        tabelaMaquinas.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
-        tabelaMaquinas.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                carregarCamposDoClique();
-            }
-        });
-
-        JScrollPane scroll = new JScrollPane(tabelaMaquinas);
-        scroll.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
-
-        return scroll;
-    }
-
-    // =====================================================================
-    // 🟩 FORMULÁRIO
-    // =====================================================================
-    private JPanel criarFormulario() {
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(8, 8, 8, 8);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-
-        // Nome
-        gbc.gridx = 0; gbc.gridy = 0;
-        form.add(new JLabel("Nome Equipamento:"), gbc);
-
-        gbc.gridx = 1;
-        txtNomeEquipamento = new JTextField();
-        form.add(txtNomeEquipamento, gbc);
-
-        // Setor
-        gbc.gridx = 0; gbc.gridy = 1;
-        form.add(new JLabel("Setor:"), gbc);
-
-        gbc.gridx = 1;
-        txtSetor = new JTextField();
-        form.add(txtSetor, gbc);
-
-        // Data
-        gbc.gridx = 0; gbc.gridy = 2;
-        form.add(new JLabel("Data Aquisição:"), gbc);
-
-        gbc.gridx = 1;
-        txtDataAquisicao = new JTextField("AAAA-MM-DD");
-        form.add(txtDataAquisicao, gbc);
-
-        // Botões CRUD
-        JPanel botoes = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-
-        JButton btnSalvar = new JButton("Salvar");
-        JButton btnAtualizar = new JButton("Atualizar");
-        JButton btnExcluir = new JButton("Excluir");
-        JButton btnVerManutencoes = new JButton("Ver Manutenções");
-
-        btnSalvar.addActionListener(e -> salvarMaquina());
-        btnAtualizar.addActionListener(e -> atualizarMaquina());
-        btnExcluir.addActionListener(e -> excluirMaquina());
-        btnVerManutencoes.addActionListener(e -> abrirTelaManutencoes());
-
-        botoes.add(btnSalvar);
-        botoes.add(btnAtualizar);
-        botoes.add(btnExcluir);
-        botoes.add(btnVerManutencoes);
-
-        gbc.gridx = 1; gbc.gridy = 3;
-        form.add(botoes, gbc);
-
-        return form;
-    }
-
-    // =====================================================================
-    // 🔧 CRUD
-    // =====================================================================
-    private void carregarCamposDoClique() {
-        int linha = tabelaMaquinas.getSelectedRow();
-        if (linha == -1) return;
-
-        idMaquinaSelecionada = (int) tabelaMaquinas.getValueAt(linha, 0);
-        txtNomeEquipamento.setText(tabelaMaquinas.getValueAt(linha, 1).toString());
-        txtSetor.setText(tabelaMaquinas.getValueAt(linha, 2).toString());
-        txtDataAquisicao.setText(tabelaMaquinas.getValueAt(linha, 3).toString());
-    }
-
-    private void carregarDadosTabela() {
-        tableModel.setRowCount(0);
-
-        String sql = "SELECT * FROM maquinas";
-
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                tableModel.addRow(new Object[]{
-                        rs.getInt("id_maquina"),
-                        rs.getString("nome_equipamento"),
-                        rs.getString("setor"),
-                        rs.getString("data_aquisicao")
-                });
-            }
-
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao carregar máquinas: " + e.getMessage());
-        }
-    }
-
-    private void salvarMaquina() {
-        String sql = "INSERT INTO maquinas (nome_equipamento, setor, data_aquisicao) VALUES (?, ?, ?)";
-
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setString(1, txtNomeEquipamento.getText());
-            ps.setString(2, txtSetor.getText());
-            ps.setString(3, txtDataAquisicao.getText());
-            ps.executeUpdate();
-
-            mensagem("Máquina salva!");
-            recarregar();
-
-        } catch (SQLException e) {
-            mensagem("Erro ao salvar: " + e.getMessage());
-        }
-    }
-
-    private void atualizarMaquina() {
-        if (idMaquinaSelecionada == -1) {
-            mensagem("Selecione uma máquina!");
             return;
         }
 
-        String sql = "UPDATE maquinas SET nome_equipamento=?, setor=?, data_aquisicao=? WHERE id_maquina=?";
+        setTitle("Gestão de Máquinas");
+        setSize(900, 550);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        // === ROOT (Fundo Windows 11) ===
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(new Color(245, 245, 245));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-            ps.setString(1, txtNomeEquipamento.getText());
-            ps.setString(2, txtSetor.getText());
-            ps.setString(3, txtDataAquisicao.getText());
-            ps.setInt(4, idMaquinaSelecionada);
+        // === TÍTULO ===
+        JLabel titulo = new JLabel("Gestão de Máquinas");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        titulo.setForeground(new Color(0, 120, 215));
 
-            ps.executeUpdate();
-            mensagem("Atualizada!");
-            recarregar();
+        JLabel sub = new JLabel("Visualize, cadastre e atualize suas máquinas");
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        sub.setForeground(new Color(90, 90, 90));
 
-        } catch (SQLException e) {
-            mensagem("Erro ao atualizar: " + e.getMessage());
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.add(titulo);
+        header.add(Box.createRigidArea(new Dimension(0, 6)));
+        header.add(sub);
+
+        root.add(header, BorderLayout.NORTH);
+
+        // === PAINEL DE BOTÕES ===
+        JPanel botoes = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        botoes.setOpaque(false);
+
+        JButton btnNovo = criarBotao("Nova Máquina");
+        JButton btnEditar = criarBotao("Editar");
+        JButton btnExcluir = criarBotao("Excluir");
+
+        botoes.add(btnNovo);
+        botoes.add(btnEditar);
+        botoes.add(btnExcluir);
+
+        root.add(botoes, BorderLayout.SOUTH);
+
+        // Permissões
+        boolean canEdit = sec.roleHasPermission(usuario.getRole(), Permission.EDIT_MACHINE);
+        boolean canDelete = sec.roleHasPermission(usuario.getRole(), Permission.DELETE_MACHINE);
+
+        btnEditar.setEnabled(canEdit);
+        btnExcluir.setEnabled(canDelete);
+        btnNovo.setEnabled(canEdit || sec.roleHasPermission(usuario.getRole(), Permission.CREATE_USER));
+
+        // === TABELA ===
+        model = new DefaultTableModel(new Object[]{
+                "ID", "Equipamento", "Setor", "Data de Aquisição"
+        }, 0);
+
+        tabela = new JTable(model);
+        tabela.setRowHeight(28);
+        tabela.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tabela.setSelectionBackground(new Color(0, 120, 215));
+        tabela.setSelectionForeground(Color.WHITE);
+        tabela.setGridColor(new Color(210, 210, 210));
+
+        // Estilo do cabeçalho
+        JTableHeader headerTb = tabela.getTableHeader();
+        headerTb.setBackground(new Color(230, 230, 230));
+        headerTb.setForeground(new Color(50, 50, 50));
+        headerTb.setFont(new Font("Segoe UI", Font.BOLD, 14));
+
+        JScrollPane scroll = new JScrollPane(tabela);
+        scroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
+
+        root.add(scroll, BorderLayout.CENTER);
+
+        // === EVENTOS ===
+        btnNovo.addActionListener(e -> novaMaquina());
+        btnEditar.addActionListener(e -> editarMaquina());
+        btnExcluir.addActionListener(e -> excluirMaquina());
+
+        carregarTabela();
+
+        setContentPane(root);
+    }
+
+    // ======== CRIA BOTÃO WINDOWS 11 ==========
+    private JButton criarBotao(String texto) {
+        JButton btn = new JButton(texto);
+
+        btn.setFocusPainted(false);
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(new Color(0, 120, 215));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 18, 10, 18));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(20, 140, 235));
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(0, 120, 215));
+            }
+        });
+
+        return btn;
+    }
+
+    private void carregarTabela() {
+        model.setRowCount(0);
+
+        List<Maquina> lista = controller.listarTodas();
+
+        for (Maquina m : lista) {
+            model.addRow(new Object[]{
+                    m.getId(),
+                    m.getNome(),
+                    m.getLocal(),
+                    m.getDataAquisicao()
+            });
+        }
+    }
+
+    private void novaMaquina() {
+        SecurityService sec = new SecurityService();
+        if (!sec.roleHasPermission(usuario.getRole(), Permission.EDIT_MACHINE)
+                && !sec.roleHasPermission(usuario.getRole(), Permission.CREATE_USER)) {
+
+            JOptionPane.showMessageDialog(this, "Você não tem permissão para criar máquinas.");
+            return;
+        }
+
+        JTextField txtNome = new JTextField();
+        JTextField txtSetor = new JTextField();
+        JTextField txtData = new JTextField(LocalDate.now().toString());
+
+        Object[] campos = {
+                "Nome do Equipamento:", txtNome,
+                "Setor:", txtSetor,
+                "Data de Aquisição:", txtData
+        };
+
+        int op = JOptionPane.showConfirmDialog(this, campos, "Nova Máquina", JOptionPane.OK_CANCEL_OPTION);
+
+        if (op == JOptionPane.OK_OPTION) {
+            try {
+                Maquina m = new Maquina();
+                m.setNome(txtNome.getText());
+                m.setLocal(txtSetor.getText());
+                m.setDataAquisicao(LocalDate.parse(txtData.getText()));
+
+                controller.inserir(m, usuario);
+                carregarTabela();
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro ao inserir: " + e.getMessage());
+            }
+        }
+    }
+
+    private void editarMaquina() {
+        int row = tabela.getSelectedRow();
+
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecione uma máquina.");
+            return;
+        }
+
+        int id = (int) tabela.getValueAt(row, 0);
+        String nomeAtual = tabela.getValueAt(row, 1).toString();
+        String setorAtual = tabela.getValueAt(row, 2).toString();
+        String dataAtual = tabela.getValueAt(row, 3).toString();
+
+        JTextField txtNome = new JTextField(nomeAtual);
+        JTextField txtSetor = new JTextField(setorAtual);
+        JTextField txtData = new JTextField(dataAtual);
+
+        Object[] campos = {
+                "Nome do Equipamento:", txtNome,
+                "Setor:", txtSetor,
+                "Data de Aquisição:", txtData
+        };
+
+        int op = JOptionPane.showConfirmDialog(this, campos, "Editar Máquina", JOptionPane.OK_CANCEL_OPTION);
+
+        if (op == JOptionPane.OK_OPTION) {
+            try {
+                Maquina m = new Maquina();
+                m.setId(id);
+                m.setNome(txtNome.getText());
+                m.setLocal(txtSetor.getText());
+                m.setDataAquisicao(LocalDate.parse(txtData.getText()));
+
+                controller.atualizar(m, usuario);
+                carregarTabela();
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro ao atualizar: " + e.getMessage());
+            }
         }
     }
 
     private void excluirMaquina() {
-        if (idMaquinaSelecionada == -1) {
-            mensagem("Selecione uma máquina!");
+        int row = tabela.getSelectedRow();
+
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecione uma máquina.");
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Deseja realmente excluir esta máquina?",
-                "Excluir",
-                JOptionPane.YES_NO_OPTION
-        );
+        int id = (int) tabela.getValueAt(row, 0);
 
-        if (confirm != JOptionPane.YES_OPTION) return;
+        int op = JOptionPane.showConfirmDialog(this, "Deseja excluir esta máquina?", "Excluir", JOptionPane.YES_NO_OPTION);
 
-        String sql = "DELETE FROM maquinas WHERE id_maquina=?";
-
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setInt(1, idMaquinaSelecionada);
-            ps.executeUpdate();
-
-            mensagem("Máquina excluída!");
-            recarregar();
-
-        } catch (SQLException e) {
-            mensagem("Erro ao excluir: " + e.getMessage());
+        if (op == JOptionPane.YES_OPTION) {
+            try {
+                controller.excluir(id, usuario);
+                carregarTabela();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro ao excluir: " + e.getMessage());
+            }
         }
-    }
-
-    private void abrirTelaManutencoes() {
-        if (idMaquinaSelecionada == -1) {
-            mensagem("Selecione uma máquina primeiro!");
-            return;
-        }
-
-        String nome = txtNomeEquipamento.getText();
-
-        TelaGestaoManutencoes t =
-                new TelaGestaoManutencoes(usuarioLogado, role, idMaquinaSelecionada, nome);
-
-        t.setVisible(true);
-        dispose();
-    }
-
-    // =====================================================================
-    // UTILITÁRIOS
-    // =====================================================================
-    private void mensagem(String msg) {
-        JOptionPane.showMessageDialog(this, msg);
-    }
-
-    private void recarregar() {
-        carregarDadosTabela();
-        limparCampos();
-    }
-
-    private void limparCampos() {
-        txtNomeEquipamento.setText("");
-        txtSetor.setText("");
-        txtDataAquisicao.setText("AAAA-MM-DD");
-        tabelaMaquinas.clearSelection();
-        idMaquinaSelecionada = -1;
     }
 }

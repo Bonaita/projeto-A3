@@ -1,345 +1,283 @@
 package view;
 
-import conexao.ConexaoMySQL;
+import controller.ManutencaoController;
+import model.Manutencao;
+import model.Usuario;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.List;
 
-/**
- * TelaGestaoManutencoes (versão moderna)
- *
- * Tela que exibe, cria, atualiza e exclui manutenções de uma máquina específica.
- * Estrutura:
- *  - TopBar (Voltar / Tela Principal / Logout / Sair)
- *  - Painel superior: informações da máquina
- *  - Tabela responsiva
- *  - Formulário organizado (GridBagLayout)
- *  - Botões de ação (CRUD)
- */
 public class TelaGestaoManutencoes extends JFrame {
 
-    private String usuarioLogado;
-    private int idMaquinaPai;
-    private String nomeMaquinaPai;
+    private final ManutencaoController controller = new ManutencaoController();
+    private JTable tabela;
+    private DefaultTableModel model;
+    private JTextField txtIdMaquina;
 
-    // Controle da manutenção selecionada
-    private int idManutencaoSelecionada = -1;
+    private final Usuario usuario;
 
-    // Componentes
-    private JTable tabelaManutencoes;
-    private DefaultTableModel tableModel;
+    public TelaGestaoManutencoes(Usuario usuario) {
+        this.usuario = usuario;
 
-    private JTextField txtDataAgendada;
-    private JComboBox<String> comboTipo;
-    private JComboBox<String> comboStatus;
-    private JTextArea txtObservacoes;
-
-    public TelaGestaoManutencoes(String usuarioLogado, String role, int idMaquina, String nomeMaquina) {
-
-        this.usuarioLogado = usuarioLogado;
-        this.idMaquinaPai = idMaquina;
-        this.nomeMaquinaPai = nomeMaquina;
-
-        setTitle("Manutenções - " + nomeMaquina);
-        setSize(1100, 720);
+        setTitle("Gestão de Manutenções");
+        setSize(1000, 550);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        setLayout(new BorderLayout());
-        // =====================================================================
-        // 🔷 TOPBAR COM BOTÕES DE NAVEGAÇÃO
-        // =====================================================================
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        // ROOT
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(new Color(245, 245, 245));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        setContentPane(root);
 
-        JLabel tituloTop = new JLabel("Manutenções da Máquina");
-        tituloTop.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        topBar.add(tituloTop, BorderLayout.WEST);
+        // ===== CABEÇALHO =====
+        JLabel titulo = new JLabel("Gestão de Manutenções");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        titulo.setForeground(new Color(0, 120, 215));
 
-        JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JLabel subtitulo = new JLabel("Gerencie as manutenções da sua frota");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitulo.setForeground(new Color(90, 90, 90));
 
-        JButton btnVoltar = new JButton("Voltar");
-        JButton btnPrincipal = new JButton("Tela Principal");
-        JButton btnLogout = new JButton("Logout");
-        JButton btnSair = new JButton("Sair");
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.add(titulo);
+        header.add(Box.createRigidArea(new Dimension(0, 5)));
+        header.add(subtitulo);
 
-        topButtons.add(btnVoltar);
-        topButtons.add(btnPrincipal);
-        topButtons.add(btnLogout);
-        topButtons.add(btnSair);
+        root.add(header, BorderLayout.NORTH);
 
-        topBar.add(topButtons, BorderLayout.EAST);
+        // ===== TOPO (FILTRO) =====
+        JPanel topo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        topo.setOpaque(false);
 
-        // Adiciona a barra no topo da janela
-        add(topBar, BorderLayout.NORTH);
+        topo.add(new JLabel("ID Máquina:"));
+        txtIdMaquina = new JTextField(8);
+        estilizarCampo(txtIdMaquina);
+        topo.add(txtIdMaquina);
 
-        // ======================= AÇÕES DOS BOTÕES =============================
+        JButton btnCarregar = criarBotao("Carregar");
+        topo.add(btnCarregar);
 
-        btnVoltar.addActionListener(e -> {
-            new TelaGestaoMaquinas(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
+        root.add(topo, BorderLayout.BEFORE_FIRST_LINE);
 
-        btnPrincipal.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
+        // ===== TABELA =====
+        model = new DefaultTableModel(new Object[]{
+                "ID", "Data", "Tipo", "Status", "Observações"
+        }, 0);
 
-        btnLogout.addActionListener(e -> {
-            new TelaLogin().setVisible(true);
-            dispose();
-        });
+        tabela = new JTable(model);
+        tabela.setRowHeight(28);
+        tabela.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tabela.setSelectionBackground(new Color(0, 120, 215));
+        tabela.setSelectionForeground(Color.WHITE);
 
-        btnSair.addActionListener(e -> System.exit(0));
+        JTableHeader headerTb = tabela.getTableHeader();
+        headerTb.setBackground(new Color(230, 230, 230));
+        headerTb.setForeground(new Color(50, 50, 50));
+        headerTb.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
-        // =====================================================================
-        // 🔵 TABELA DE MANUTENÇÕES
-        // =====================================================================
-        String[] colunas = {"ID", "Data", "Tipo", "Status", "Observações"};
-        tableModel = new DefaultTableModel(colunas, 0);
+        JScrollPane scroll = new JScrollPane(tabela);
+        scroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
 
-        tabelaManutencoes = new JTable(tableModel);
-        tabelaManutencoes.setRowHeight(25);
-        tabelaManutencoes.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        root.add(scroll, BorderLayout.CENTER);
 
-        JScrollPane scrollTabela = new JScrollPane(tabelaManutencoes);
-        scrollTabela.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-        add(scrollTabela, BorderLayout.CENTER);
+        // ===== BOTÕES INFERIORES =====
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        bottom.setOpaque(false);
 
-        // =====================================================================
-        // 🟩 FORMULÁRIO (GridBagLayout para layout limpo e organizado)
-        // =====================================================================
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(8, 8, 8, 8);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        JButton btnNovo = criarBotao("Novo");
+        JButton btnEditar = criarBotao("Editar");
+        JButton btnExcluir = criarBotao("Excluir");
 
-        // Campo Data
-        gbc.gridx = 0; gbc.gridy = 0;
-        formPanel.add(new JLabel("Data Agendada:"), gbc);
+        bottom.add(btnNovo);
+        bottom.add(btnEditar);
+        bottom.add(btnExcluir);
 
-        gbc.gridx = 1;
-        txtDataAgendada = new JTextField("AAAA-MM-DD");
-        formPanel.add(txtDataAgendada, gbc);
+        root.add(bottom, BorderLayout.SOUTH);
 
-        // Campo Tipo
-        gbc.gridx = 0; gbc.gridy = 1;
-        formPanel.add(new JLabel("Tipo:"), gbc);
+        // ===== AÇÕES =====
+        btnCarregar.addActionListener(e -> carregar());
+        btnNovo.addActionListener(e -> novo());
+        btnEditar.addActionListener(e -> editar());
+        btnExcluir.addActionListener(e -> excluir());
+    }
 
-        gbc.gridx = 1;
-        comboTipo = new JComboBox<>(new String[]{"Preventiva", "Corretiva", "Limpeza", "Inspeção"});
-        formPanel.add(comboTipo, gbc);
+    // ======== CRIA BOTÃO WINDOWS 11 ==========
+    private JButton criarBotao(String texto) {
+        JButton btn = new JButton(texto);
 
-        // Campo Status
-        gbc.gridx = 0; gbc.gridy = 2;
-        formPanel.add(new JLabel("Status:"), gbc);
+        btn.setFocusPainted(false);
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(new Color(0, 120, 215));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 18, 10, 18));
 
-        gbc.gridx = 1;
-        comboStatus = new JComboBox<>(new String[]{"Agendada", "Concluída", "Cancelada"});
-        formPanel.add(comboStatus, gbc);
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(20, 140, 235));
+            }
 
-        // Campo Observações
-        gbc.gridx = 0; gbc.gridy = 3;
-        gbc.anchor = GridBagConstraints.NORTH;
-        formPanel.add(new JLabel("Observações:"), gbc);
-
-        gbc.gridx = 1;
-        gbc.gridheight = 2;
-        txtObservacoes = new JTextArea(4, 20);
-        JScrollPane scrollObs = new JScrollPane(txtObservacoes);
-        formPanel.add(scrollObs, gbc);
-
-        // Botões (CRUD)
-        JPanel botoesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-
-        JButton btnAgendar = new JButton("Agendar");
-        JButton btnAtualizar = new JButton("Atualizar");
-        JButton btnExcluir = new JButton("Excluir");
-
-        botoesPanel.add(btnAgendar);
-        botoesPanel.add(btnAtualizar);
-        botoesPanel.add(btnExcluir);
-
-        gbc.gridheight = 1;
-        gbc.gridx = 1; gbc.gridy = 5;
-        formPanel.add(botoesPanel, gbc);
-
-        add(formPanel, BorderLayout.SOUTH);
-
-        // =====================================================================
-        // 🔻 AÇÕES DOS BOTÕES
-        // =====================================================================
-        btnVoltar.addActionListener(e -> {
-            new TelaGestaoMaquinas(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
-
-        btnPrincipal.addActionListener(e -> {
-            new TelaPrincipal(usuarioLogado, role).setVisible(true);
-            dispose();
-        });
-
-        btnLogout.addActionListener(e -> {
-            new TelaLogin().setVisible(true);
-            dispose();
-        });
-
-        btnSair.addActionListener(e -> System.exit(0));
-
-        btnAgendar.addActionListener(e -> agendarManutencao());
-        btnAtualizar.addActionListener(e -> atualizarManutencao());
-        btnExcluir.addActionListener(e -> excluirManutencao());
-
-        tabelaManutencoes.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                carregarCamposDoClique();
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(0, 120, 215));
             }
         });
 
-        carregarDadosManutencoes();
+        return btn;
     }
 
-    // =====================================================================
-    // 🔧 CRUD
-    // =====================================================================
-
-    private void carregarCamposDoClique() {
-        int linha = tabelaManutencoes.getSelectedRow();
-        if (linha == -1) return;
-
-        idManutencaoSelecionada = (int) tabelaManutencoes.getValueAt(linha, 0);
-        txtDataAgendada.setText((String) tabelaManutencoes.getValueAt(linha, 1));
-        comboTipo.setSelectedItem(tabelaManutencoes.getValueAt(linha, 2));
-        comboStatus.setSelectedItem(tabelaManutencoes.getValueAt(linha, 3));
-        txtObservacoes.setText((String) tabelaManutencoes.getValueAt(linha, 4));
+    // ======== ESTILO DE CAMPOS ==========
+    private void estilizarCampo(JTextField campo) {
+        campo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        campo.setBackground(new Color(245, 245, 245));
+        campo.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(5, 8, 5, 8)
+        ));
     }
 
-    private void carregarDadosManutencoes() {
-        tableModel.setRowCount(0);
-        String sql = "SELECT * FROM manutencoes WHERE id_maquina = ?";
+    // ======== LÓGICA ========
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+    private void carregar() {
+        model.setRowCount(0);
 
-            ps.setInt(1, idMaquinaPai);
-            ResultSet rs = ps.executeQuery();
+        try {
+            List<Manutencao> lista;
 
-            while (rs.next()) {
-                tableModel.addRow(new Object[]{
-                        rs.getInt("id_manutencao"),
-                        rs.getString("data_agendada"),
-                        rs.getString("tipo_manutencao"),
-                        rs.getString("status"),
-                        rs.getString("observacoes")
+            if (txtIdMaquina.getText().isBlank()) {
+                lista = controller.listarTodas();
+            } else {
+                int id = Integer.parseInt(txtIdMaquina.getText());
+                lista = controller.listarPorMaquina(id);
+            }
+
+            for (Manutencao m : lista) {
+                model.addRow(new Object[]{
+                        m.getId(),
+                        m.getDataAgendada(),
+                        m.getTipo(),
+                        m.getStatus(),
+                        m.getObservacoes()
                 });
             }
 
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao carregar manutenções: " + e.getMessage());
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao carregar: " + e.getMessage());
         }
     }
 
-    private void agendarManutencao() {
-        String data = txtDataAgendada.getText();
-        String tipo = comboTipo.getSelectedItem().toString();
-        String status = comboStatus.getSelectedItem().toString();
-        String obs = txtObservacoes.getText();
+    private void novo() {
+        JTextField txtData = new JTextField(LocalDate.now().toString());
+        JTextField txtTipo = new JTextField();
+        JTextField txtStatus = new JTextField();
+        JTextArea txtObs = new JTextArea(5, 20);
 
-        String sql = "INSERT INTO manutencoes (id_maquina, data_agendada, tipo_manutencao, status, observacoes) VALUES (?, ?, ?, ?, ?)";
+        estilizarCampo(txtData);
+        estilizarCampo(txtTipo);
+        estilizarCampo(txtStatus);
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        Object[] campos = {
+                "Data (yyyy-mm-dd):", txtData,
+                "Tipo:", txtTipo,
+                "Status:", txtStatus,
+                "Observações:", new JScrollPane(txtObs)
+        };
 
-            ps.setInt(1, idMaquinaPai);
-            ps.setString(2, data);
-            ps.setString(3, tipo);
-            ps.setString(4, status);
-            ps.setString(5, obs);
+        int op = JOptionPane.showConfirmDialog(this, campos, "Nova Manutenção", JOptionPane.OK_CANCEL_OPTION);
 
-            ps.executeUpdate();
-            JOptionPane.showMessageDialog(this, "Manutenção agendada!");
+        if (op == JOptionPane.OK_OPTION) {
+            try {
+                Manutencao m = new Manutencao();
+                m.setIdMaquina(Integer.parseInt(txtIdMaquina.getText()));
+                m.setDataAgendada(LocalDate.parse(txtData.getText()));
+                m.setTipo(txtTipo.getText());
+                m.setStatus(txtStatus.getText());
+                m.setObservacoes(txtObs.getText());
 
-            carregarDadosManutencoes();
-            limparCampos();
+                controller.inserir(m, usuario.getId());
+                carregar();
 
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao agendar: " + e.getMessage());
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage());
+            }
         }
     }
 
-    private void atualizarManutencao() {
-        if (idManutencaoSelecionada == -1) {
-            JOptionPane.showMessageDialog(this, "Selecione uma manutenção!");
+    private void editar() {
+        int row = tabela.getSelectedRow();
+
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecione uma manutenção.");
             return;
         }
 
-        String sql = "UPDATE manutencoes SET data_agendada=?, tipo_manutencao=?, status=?, observacoes=? WHERE id_manutencao=?";
+        int id = (int) tabela.getValueAt(row, 0);
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        JTextField txtData = new JTextField(tabela.getValueAt(row, 1).toString());
+        JTextField txtTipo = new JTextField(tabela.getValueAt(row, 2).toString());
+        JTextField txtStatus = new JTextField(tabela.getValueAt(row, 3).toString());
+        JTextArea txtObs = new JTextArea(tabela.getValueAt(row, 4).toString());
 
-            ps.setString(1, txtDataAgendada.getText());
-            ps.setString(2, comboTipo.getSelectedItem().toString());
-            ps.setString(3, comboStatus.getSelectedItem().toString());
-            ps.setString(4, txtObservacoes.getText());
-            ps.setInt(5, idManutencaoSelecionada);
+        estilizarCampo(txtData);
+        estilizarCampo(txtTipo);
+        estilizarCampo(txtStatus);
 
-            ps.executeUpdate();
-            JOptionPane.showMessageDialog(this, "Atualizado!");
+        Object[] campos = {
+                "Data:", txtData,
+                "Tipo:", txtTipo,
+                "Status:", txtStatus,
+                "Observações:", new JScrollPane(txtObs)
+        };
 
-            carregarDadosManutencoes();
-            limparCampos();
+        int op = JOptionPane.showConfirmDialog(this, campos, "Editar Manutenção", JOptionPane.OK_CANCEL_OPTION);
 
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao atualizar: " + e.getMessage());
+        if (op == JOptionPane.OK_OPTION) {
+            try {
+                Manutencao m = new Manutencao();
+                m.setId(id);
+                m.setIdMaquina(Integer.parseInt(txtIdMaquina.getText()));
+                m.setDataAgendada(LocalDate.parse(txtData.getText()));
+                m.setTipo(txtTipo.getText());
+                m.setStatus(txtStatus.getText());
+                m.setObservacoes(txtObs.getText());
+
+                controller.atualizar(m, usuario.getId());
+                carregar();
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage());
+            }
         }
     }
 
-    private void excluirManutencao() {
-        if (idManutencaoSelecionada == -1) {
-            JOptionPane.showMessageDialog(this, "Selecione uma manutenção!");
+    private void excluir() {
+        int row = tabela.getSelectedRow();
+
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecione uma manutenção.");
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Deseja realmente excluir?", "Confirmar",
-                JOptionPane.YES_NO_OPTION);
+        int id = (int) tabela.getValueAt(row, 0);
 
-        if (confirm != JOptionPane.YES_OPTION) return;
+        int op = JOptionPane.showConfirmDialog(
+                this, "Excluir manutenção?", "Confirmar", JOptionPane.YES_NO_OPTION
+        );
 
-        String sql = "DELETE FROM manutencoes WHERE id_manutencao=?";
+        if (op == JOptionPane.YES_OPTION) {
+            try {
+                controller.excluir(id, usuario.getId());
+                carregar();
 
-        try (Connection con = ConexaoMySQL.getConexao();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setInt(1, idManutencaoSelecionada);
-            ps.executeUpdate();
-
-            JOptionPane.showMessageDialog(this, "Excluída!");
-
-            carregarDadosManutencoes();
-            limparCampos();
-
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao excluir: " + e.getMessage());
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage());
+            }
         }
-    }
-
-    private void limparCampos() {
-        txtDataAgendada.setText("AAAA-MM-DD");
-        comboTipo.setSelectedIndex(0);
-        comboStatus.setSelectedIndex(0);
-        txtObservacoes.setText("");
-        tabelaManutencoes.clearSelection();
-        idManutencaoSelecionada = -1;
     }
 }

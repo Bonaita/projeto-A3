@@ -1,11 +1,15 @@
 <component name="libraryTable">
-  <library name="mysql-connector-j-9.5.0">
+  <library name="/libs">
     <CLASSES>
       <root url="jar://$USER_HOME$/IdeaSnapshots/mysql-connector-j-9.5.0/mysql-connector-j-9.5.0/mysql-connector-j-9.5.0.jar!/" />
       <root url="jar://$USER_HOME$/Downloads/flatlaf-demo-3.6.2.jar!/" />
       <root url="jar://$USER_HOME$/Downloads/jfreechart-1.5.4.jar!/" />
       <root url="jar://$USER_HOME$/Downloads/jcommon-1.0.24.jar!/" />
       <root url="jar://$USER_HOME$/Downloads/jbcrypt-0.4.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/HikariCP-5.1.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/slf4j-simple-2.0.7.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/slf4j-api-2.0.7.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/flatlaf-extras-3.6.2.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

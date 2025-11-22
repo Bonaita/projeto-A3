@@ -1,90 +1,98 @@
 package services;
 
-import dao.UserDAO;
+import dao.UsuarioDAO;
 import model.Usuario;
 import org.mindrot.jbcrypt.BCrypt;
-
 import java.sql.SQLException;
 import java.util.logging.Logger;
 
 /**
- * AuthService: camada de autenticação.
- * - gera hashes bcrypt
- * - verifica credenciais e aplica política de lockout
+ * AuthService
  *
- * Observação: o valor MAX_TENTATIVAS pode ser ajustado.
+ * Responsável por:
+ * - autenticação de usuários
+ * - verificação de senha
+ * - geração de hash seguro (bcrypt)
+ * - controle de tentativas
+ * - bloqueio automático
+ * - registro de auditoria
+ *
+ * NÃO acessa o banco diretamente — sempre usa o DAO.
  */
 public class AuthService {
 
+    private final UsuarioDAO usuarioDAO = new UsuarioDAO();
     private final AuditoriaService auditoria = new AuditoriaService();
-    private final UserDAO userDAO = new UserDAO();
     private final Logger logger = Logger.getLogger(AuthService.class.getName());
-    private final int MAX_TENTATIVAS = 3;
+
+    private final int MAX_TENTATIVAS = 3;  // pode ajustar
 
     /**
-     * Gera um hash BCrypt para uma senha em texto.
+     * Gera hash seguro usando Bcrypt.
      */
     public String gerarHash(String senha) {
         return BCrypt.hashpw(senha, BCrypt.gensalt(12));
     }
 
     /**
-     * Valida a senha digitada contra o hash do banco.
+     * Verifica senha usando Bcrypt.
      */
     public boolean verificarSenha(String senhaDigitada, String hashNoBanco) {
-        if (hashNoBanco == null) return false;
+        if (senhaDigitada == null || hashNoBanco == null) {
+            return false;
+        }
         return BCrypt.checkpw(senhaDigitada, hashNoBanco);
     }
 
     /**
-     * Tenta autenticar um usuário pelo login e senha.
-     *
-     * Retorna o objeto Usuario em caso de sucesso.
-     * Retorna null em caso de falha (senha incorreta ou usuário não existe ou bloqueado).
-     *
-     * Além disso:
-     * - incrementa tentativas em caso de falha
-     * - bloqueia o usuário se exceder MAX_TENTATIVAS
-     * - reseta tentativas e registra ultimo_login em caso de sucesso
-     *
-     * Lança SQLException em caso de problema no banco.
+     * Autentica o usuário:
+     * - busca por login
+     * - verifica bloqueio
+     * - verifica senha
+     * - registra tentativas
+     * - registra sucesso no login
      */
     public Usuario autenticar(String login, String senhaDigitada) throws SQLException {
-        Usuario u = userDAO.findByLogin(login);
-        if (u == null) {
-            logger.info("Tentativa de login com usuário inexistente: " + login);
+
+        Usuario user = usuarioDAO.findByLogin(login);
+
+        // 1. Verificar usuário
+        if (user == null) {
+            logger.info("Login falhou: usuário não encontrado (" + login + ")");
             return null;
         }
 
-        if (u.isBloqueado()) {
+        // 2. Verificar se está bloqueado
+        if (user.isBloqueado()) {
             logger.warning("Tentativa de login em conta bloqueada: " + login);
+            auditoria.registrar(user.getId(), "LOGIN_BLOCKED", "Conta bloqueada tentou login.");
             return null;
         }
 
-        // Verifica senha
-        if (verificarSenha(senhaDigitada, u.getSenhaHash())) {
-            // sucesso: resetar tentativas e registrar último login
-            userDAO.resetarTentativas(u.getId());
-            userDAO.registrarUltimoLogin(u.getId());
+        // 3. Verificar senha
+        boolean senhaOk = verificarSenha(senhaDigitada, user.getSenhaHash());
 
-            auditoria.registrar(u.getId(), "LOGIN_SUCCESS", "Login bem-sucedido para " + login);
+        if (!senhaOk) {
+            usuarioDAO.incrementarTentativa(user.getId());
+            auditoria.registrar(user.getId(), "LOGIN_FAILURE", "Senha incorreta para " + login);
 
-            return u;
-        } else {
-            // falha: incrementar tentativas e bloquear se necessário
+            int novasTentativas = user.getTentativasLogin() + 1;
 
-            userDAO.incrementarTentativa(u.getId());
-            int tent = u.getTentativasLogin() + 1; // nota: valor anterior; para 100% correto reconsultar do DB
-            auditoria.registrar(u.getId(), "LOGIN_FAILURE", "Senha incorreta para " + login);
-
-            // Se já excedeu (podemos reconsultar o valor real, mas bloquear se a tentativa antiga +1 >= MAX)
-            if (tent >= MAX_TENTATIVAS) {
-
-                userDAO.bloquearUsuario(u.getId());
-                auditoria.registrar(u.getId(), "USER_BLOCKED",
-                        "Usuário bloqueado após exceder tentativas de login");
+            if (novasTentativas >= MAX_TENTATIVAS) {
+                usuarioDAO.bloquearUsuario(user.getId());
+                auditoria.registrar(user.getId(), "USER_BLOCKED",
+                        "Usuário bloqueado após " + MAX_TENTATIVAS + " tentativas.");
             }
+
             return null;
         }
+
+        // 4. Login OK → resetar tentativas
+        usuarioDAO.resetarTentativas(user.getId());
+        usuarioDAO.registrarUltimoLogin(user.getId());
+
+        auditoria.registrar(user.getId(), "LOGIN_SUCCESS", "Login realizado com sucesso.");
+
+        return user;
     }
 }

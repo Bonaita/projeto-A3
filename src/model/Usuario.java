@@ -1,39 +1,52 @@
 package model;
 
-/**
- * Modelo simples para representar o usuário.
- */
-public class Usuario {
-    private int id;
-    private String login;
-    private String nomeCompleto;
-    private String senhaHash;
-    private String role;
-    private boolean primeiroAcesso;
-    private int tentativasLogin;
-    private boolean bloqueado;
+import java.time.LocalDateTime;
 
+public class Usuario {
+
+    private int id;
+    private String nomeCompleto;
+    private String login;
+    private String senhaHash;
+    private boolean bloqueado;
+    private String role;
+
+    // Campos necessários para AuthService
+    private int tentativasLogin;
+    private LocalDateTime ultimoLogin;
+
+    public Usuario() {}
+
+    // ===== ID =====
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 
-    public String getLogin() { return login; }
-    public void setLogin(String login) { this.login = login; }
-
+    // ===== Nome =====
     public String getNomeCompleto() { return nomeCompleto; }
     public void setNomeCompleto(String nomeCompleto) { this.nomeCompleto = nomeCompleto; }
 
+    // ===== Login =====
+    public String getLogin() { return login; }
+    public void setLogin(String login) { this.login = login; }
+
+    // ===== Senha =====
     public String getSenhaHash() { return senhaHash; }
     public void setSenhaHash(String senhaHash) { this.senhaHash = senhaHash; }
 
+    // ===== Bloqueado =====
+    public boolean isBloqueado() { return bloqueado; }
+    public void setBloqueado(boolean bloqueado) { this.bloqueado = bloqueado; }
+
+    // ===== Role =====
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public boolean isAdmin() { return "ADMIN".equalsIgnoreCase(role); }
 
-    public boolean isPrimeiroAcesso() { return primeiroAcesso; }
-    public void setPrimeiroAcesso(boolean primeiroAcesso) { this.primeiroAcesso = primeiroAcesso; }
-
+    // ===== Tentativas de Login =====
     public int getTentativasLogin() { return tentativasLogin; }
     public void setTentativasLogin(int tentativasLogin) { this.tentativasLogin = tentativasLogin; }
 
-    public boolean isBloqueado() { return bloqueado; }
-    public void setBloqueado(boolean bloqueado) { this.bloqueado = bloqueado; }
+    // ===== Último login =====
+    public LocalDateTime getUltimoLogin() { return ultimoLogin; }
+    public void setUltimoLogin(LocalDateTime ultimoLogin) { this.ultimoLogin = ultimoLogin; }
 }

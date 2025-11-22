@@ -1,67 +1,47 @@
 package conexao;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
+/**
+ * ConexaoMySQL com HikariCP
+ */
 public class ConexaoMySQL {
 
-    // --- CONFIGURE SEUS DADOS AQUI ---
-    private static final String DB_NAME = "db_manutencao";
-    private static final String HOST = "127.0.0.1";
-    private static final String PORT = "3306";
-    private static final String USER = "root";
-    private static final String PASS = "123456";
+    private static final HikariDataSource dataSource;
 
-    // --- NÃO PRECISA MUDAR DAQUI PARA BAIXO ---
-    private static final String URL = "jdbc:mysql://" + HOST + ":" + PORT + "/" + DB_NAME
-            + "?useTimezone=true&serverTimezone=UTC";
-    private static final String DRIVER_CLASS = "com.mysql.cj.jdbc.Driver";
+    static {
 
+        HikariConfig config = new HikariConfig();
 
-    public static Connection getConexao() {
-        try {
-            // 1. Carrega o driver (que o Maven baixou)
-            Class.forName(DRIVER_CLASS);
+        // ===== CONFIGURAÇÕES DO BANCO =====
+        config.setJdbcUrl("jdbc:mysql://localhost:3306/db_manutencao?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+        config.setUsername("root");
+        config.setPassword("123456");
 
-            // 2. Tenta obter a conexão
-            return DriverManager.getConnection(URL, USER, PASS);
+        // ===== CONFIGURAÇÕES DO HIKARI =====
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(2);
+        config.setIdleTimeout(30000);
+        config.setConnectionTimeout(10000);
+        config.setMaxLifetime(600000);
+        config.setLeakDetectionThreshold(5000);
 
-        } catch (ClassNotFoundException e) {
-            System.err.println("ERRO: Driver JDBC do MySQL não encontrado!");
-            System.err.println("Verifique se a dependência do Maven no 'pom.xml' está correta.");
-            e.printStackTrace();
-            return null;
+        // Teste automático para garantir saúde do pool
+        config.setConnectionTestQuery("SELECT 1");
 
-        } catch (SQLException e) {
-            System.err.println("ERRO: Falha ao conectar ao banco.");
-            System.err.println("Verifique se o MySQL (XAMPP) está ligado.");
-            System.err.println("Verifique se USER e PASS estão corretos.");
-            e.printStackTrace();
-            return null;
-        }
+        dataSource = new HikariDataSource(config);
+
+        System.out.println("HikariCP inicializado com sucesso!");
     }
 
     /**
-     * MÉTODO DE TESTE: Execute este arquivo para testar a conexão
+     * Retorna uma conexão do pool (rápida e confiável).
      */
-    public static void main(String[] args) {
-        System.out.println("Testando conexão com o banco...");
-        Connection conn = getConexao();
-
-        if (conn != null) {
-            System.out.println("==========================================");
-            System.out.println("SUCESSO! Conexão estabelecida.");
-            System.out.println("==========================================");
-            try {
-                conn.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        } else {
-            System.err.println("==========================================");
-            System.err.println("FALHA! Não foi possível conectar.");
-            System.err.println("==========================================");
-        }
+    public static Connection getConexao() throws SQLException {
+        return dataSource.getConnection();
     }
 }

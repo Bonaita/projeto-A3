@@ -1,146 +1,211 @@
 package view;
 
-import dao.UserDAO;
+import dao.UsuarioDAO;
 import model.Usuario;
-import services.AuditoriaService;
+import security.Permission;
+import security.SecurityService;
+import services.AuthService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.util.List;
 
 public class TelaAdminUsuarios extends JFrame {
 
+    private final Usuario usuario;
     private JTable tabela;
     private DefaultTableModel model;
 
-    public TelaAdminUsuarios(String adminNome) {
-        setTitle("Admin - Gestão de Usuários");
-        setSize(700, 500);
-        setLocationRelativeTo(null);
-        setLayout(new BorderLayout());
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+    private final UsuarioDAO usuarioDAO = new UsuarioDAO();
+    private final AuthService authService = new AuthService();
+    private final SecurityService security = new SecurityService();
 
-        model = new DefaultTableModel(
-                new String[]{"ID", "Login", "Nome", "Tentativas", "Bloqueado"},
-                0
-        );
+    public TelaAdminUsuarios(Usuario usuario) {
+        this.usuario = usuario;
+
+        // ======= RBAC - SOMENTE ADMIN =======
+        if (!security.roleHasPermission(usuario.getRole(), Permission.MANAGE_USERS)) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Você não tem permissão para acessar Administração de Usuários.",
+                    "Acesso Negado",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            dispose();
+            return;
+        }
+
+        setTitle("Administração de Usuários");
+        setSize(900, 550);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        // ROOT
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(new Color(245, 245, 245));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        setContentPane(root);
+
+        // ===== CABEÇALHO =====
+        JLabel titulo = new JLabel("Administração de Usuários");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        titulo.setForeground(new Color(0, 120, 215));
+
+        JLabel subtitulo = new JLabel("Gerencie contas, redefina senhas e controle acessos");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitulo.setForeground(new Color(90, 90, 90));
+
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.add(titulo);
+        header.add(Box.createRigidArea(new Dimension(0, 5)));
+        header.add(subtitulo);
+
+        root.add(header, BorderLayout.NORTH);
+
+        // ===== TABELA =====
+        model = new DefaultTableModel(new Object[]{"ID", "Login", "Nome", "Bloqueado"}, 0);
 
         tabela = new JTable(model);
-        add(new JScrollPane(tabela), BorderLayout.CENTER);
+        tabela.setRowHeight(28);
+        tabela.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tabela.setSelectionBackground(new Color(0, 120, 215));
+        tabela.setSelectionForeground(Color.WHITE);
 
-        JPanel buttons = new JPanel(new FlowLayout());
+        JTableHeader headerTb = tabela.getTableHeader();
+        headerTb.setBackground(new Color(230, 230, 230));
+        headerTb.setForeground(new Color(50, 50, 50));
+        headerTb.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
-        JButton btnDesbloquear = new JButton("Desbloquear Usuário");
-        JButton btnResetTentativas = new JButton("Resetar Tentativas");
-        JButton btnAtualizar = new JButton("Atualizar Lista");
+        JScrollPane scroll = new JScrollPane(tabela);
+        scroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
 
-        buttons.add(btnAtualizar);
-        buttons.add(btnDesbloquear);
-        buttons.add(btnResetTentativas);
+        root.add(scroll, BorderLayout.CENTER);
 
-        add(buttons, BorderLayout.SOUTH);
+        // ===== BOTÕES INFERIORES =====
+        JPanel botoes = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        botoes.setOpaque(false);
 
+        JButton btnNovo = criarBotao("Novo Usuário");
+        JButton btnAtualizar = criarBotao("Atualizar Lista");
+        JButton btnResetSenha = criarBotao("Resetar Senha");
+
+        botoes.add(btnNovo);
+        botoes.add(btnAtualizar);
+        botoes.add(btnResetSenha);
+
+        root.add(botoes, BorderLayout.SOUTH);
+
+        // ===== AÇÕES =====
+        btnNovo.addActionListener(e -> cadastrarUsuario());
         btnAtualizar.addActionListener(e -> carregarUsuarios());
-        btnDesbloquear.addActionListener(e -> desbloquearUsuario());
-        btnResetTentativas.addActionListener(e -> resetarTentativas());
+        btnResetSenha.addActionListener(e -> resetarSenha());
 
         carregarUsuarios();
     }
 
+    // ========= BOTÃO WINDOWS 11 ==========
+    private JButton criarBotao(String texto) {
+        JButton btn = new JButton(texto);
+
+        btn.setFocusPainted(false);
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(new Color(0, 120, 215));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createEmptyBorder(10, 18, 10, 18));
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(20, 140, 235));
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(new Color(0, 120, 215));
+            }
+        });
+
+        return btn;
+    }
+
+    // ========= LÓGICA ==========
     private void carregarUsuarios() {
         model.setRowCount(0);
 
         try {
-            var lista = listarTodosUsuarios();
+            List<Usuario> lista = usuarioDAO.listarTodos();
 
             for (Usuario u : lista) {
                 model.addRow(new Object[]{
                         u.getId(),
                         u.getLogin(),
                         u.getNomeCompleto(),
-                        u.getTentativasLogin(),
                         u.isBloqueado() ? "Sim" : "Não"
                 });
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao carregar usuários: " + e.getMessage());
         }
     }
 
-    private ArrayList<Usuario> listarTodosUsuarios() throws SQLException {
-        var lista = new ArrayList<Usuario>();
+    private void cadastrarUsuario() {
+        JTextField txtLogin = new JTextField();
+        JTextField txtNome = new JTextField();
+        JPasswordField txtSenha = new JPasswordField();
 
-        String sql = "SELECT * FROM usuarios";
+        Object[] campos = {
+                "Login:", txtLogin,
+                "Nome completo:", txtNome,
+                "Senha inicial:", txtSenha
+        };
 
-        try (var c = conexao.ConexaoMySQL.getConexao();
-             var ps = c.prepareStatement(sql);
-             var rs = ps.executeQuery()) {
+        int op = JOptionPane.showConfirmDialog(
+                this, campos, "Novo Usuário", JOptionPane.OK_CANCEL_OPTION
+        );
 
-            while (rs.next()) {
-                Usuario u = new Usuario();
-                u.setId(rs.getInt("id_usuario"));
-                u.setLogin(rs.getString("login"));
-                u.setNomeCompleto(rs.getString("nome_completo"));
-                u.setTentativasLogin(rs.getInt("tentativas_login"));
-                u.setBloqueado(rs.getBoolean("bloqueado"));
+        if (op == JOptionPane.OK_OPTION) {
+            try {
+                Usuario novo = new Usuario();
+                novo.setLogin(txtLogin.getText());
+                novo.setNomeCompleto(txtNome.getText());
+                novo.setSenhaHash(authService.gerarHash(new String(txtSenha.getPassword())));
+                novo.setRole("USER");
 
-                lista.add(u);
+                usuarioDAO.inserirUsuario(novo);
+
+                JOptionPane.showMessageDialog(this, "Usuário criado com sucesso!");
+                carregarUsuarios();
+
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Erro ao criar usuário: " + e.getMessage());
             }
         }
-        return lista;
     }
 
-    private void desbloquearUsuario() {
+    private void resetarSenha() {
         int row = tabela.getSelectedRow();
         if (row < 0) {
             JOptionPane.showMessageDialog(this, "Selecione um usuário.");
             return;
         }
 
-        int id = (int) model.getValueAt(row, 0);
+        int id = (int) tabela.getValueAt(row, 0);
+        String novaSenha = JOptionPane.showInputDialog(this, "Nova senha:");
+
+        if (novaSenha == null || novaSenha.isBlank()) return;
 
         try {
-            var dao = new UserDAO();
-            dao.resetarTentativas(id);
-            dao.bloquearUsuario(id); // mas esse bloqueia, então criamos desbloquear
+            String hash = authService.gerarHash(novaSenha);
+            usuarioDAO.resetarSenha(id, hash);
 
-            String sql = "UPDATE usuarios SET bloqueado = FALSE WHERE id_usuario = ?";
-            try (var c = conexao.ConexaoMySQL.getConexao();
-                 var ps = c.prepareStatement(sql)) {
-                ps.setInt(1, id);
-                ps.executeUpdate();
-            }
-
-            new AuditoriaService().registrar(id, "USER_UNLOCKED", "Desbloqueado por admin");
-            JOptionPane.showMessageDialog(this, "Usuário desbloqueado!");
-            carregarUsuarios();
+            JOptionPane.showMessageDialog(this, "Senha redefinida com sucesso!");
 
         } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void resetarTentativas() {
-        int row = tabela.getSelectedRow();
-        if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Selecione um usuário.");
-            return;
-        }
-
-        int id = (int) model.getValueAt(row, 0);
-
-        try {
-            var dao = new UserDAO();
-            dao.resetarTentativas(id);
-            JOptionPane.showMessageDialog(this, "Tentativas resetadas!");
-            new AuditoriaService().registrar(id, "RESET_ATTEMPTS", "Resetado por admin");
-
-            carregarUsuarios();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao redefinir senha: " + e.getMessage());
         }
     }
 }

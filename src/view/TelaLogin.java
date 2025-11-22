@@ -1,177 +1,191 @@
 package view;
 
+import controller.UsuarioController;
 import model.Usuario;
-import services.AuthService;
-import dao.UserDAO;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.sql.SQLException;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 
-/**
- * TelaLogin atualizada com suporte:
- *  - BCrypt
- *  - Auditoria futura
- *  - Tentativas de login com bloqueio
- *  - ROLE (ADMIN/USER)
- */
 public class TelaLogin extends JFrame {
 
-    private JTextField txtLogin;
-    private JPasswordField txtSenha;
-    private JButton btnEntrar;
+    private final UsuarioController controller = new UsuarioController();
 
     public TelaLogin() {
-        setTitle("Login - Sistema de Gestão");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 550);
+
+        setTitle("Login - Sistema de Manutenções");
+        setSize(420, 350);
         setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
 
-        setLayout(new BorderLayout());
+        // Fundo (Windows 11)
+        JPanel background = new JPanel(new GridBagLayout());
+        background.setBackground(new Color(240, 240, 240));
 
-        // Painel esquerdo (branding)
-        JPanel leftPanel = new JPanel(new GridBagLayout());
-        leftPanel.setPreferredSize(new Dimension(370, getHeight()));
-        leftPanel.setBackground(new Color(33, 150, 243));
-        JLabel sistemaTitulo = new JLabel("<html><center><h1 style='color:white;'>Sistema de Gestão</h1></center></html>");
-        leftPanel.add(sistemaTitulo);
-        add(leftPanel, BorderLayout.WEST);
+        // Card
+        JPanel card = new JPanel(new GridBagLayout());
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+                new EmptyBorder(30, 30, 30, 30)
+        ));
+        card.setPreferredSize(new Dimension(330, 300));
 
-        // Painel direito com formulário
-        JPanel rightPanel = new JPanel();
-        rightPanel.setBorder(BorderFactory.createEmptyBorder(40, 60, 40, 60));
-        rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
-        add(rightPanel, BorderLayout.CENTER);
+        // Layout interno
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(10, 10, 10, 10);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.gridx = 0;
 
-        JLabel lblTituloLogin = new JLabel("Acesse sua conta");
-        lblTituloLogin.setFont(new Font("Segoe UI", Font.BOLD, 26));
-        lblTituloLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Título
+        JLabel lblTitulo = new JLabel("Acesso ao Sistema", SwingConstants.CENTER);
+        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        lblTitulo.setForeground(new Color(0, 120, 215));
 
-        rightPanel.add(lblTituloLogin);
-        rightPanel.add(Box.createVerticalStrut(40));
+        c.gridy = 0;
+        card.add(lblTitulo, c);
 
-        JLabel lblLogin = new JLabel("Usuário");
-        lblLogin.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        lblLogin.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // Label usuário
+        JLabel lblLogin = new JLabel("Usuário:");
+        lblLogin.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblLogin.setForeground(Color.BLACK);
 
-        txtLogin = new JTextField();
-        txtLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        c.gridy = 1;
+        card.add(lblLogin, c);
 
-        rightPanel.add(lblLogin);
-        rightPanel.add(Box.createVerticalStrut(8));
-        rightPanel.add(txtLogin);
-        rightPanel.add(Box.createVerticalStrut(25));
+        // Campo usuário
+        JTextField txtLogin = new JTextField();
+        estilizarCampo(txtLogin);
+        txtLogin.setToolTipText("Digite seu usuário");
 
-        JLabel lblSenha = new JLabel("Senha");
-        lblSenha.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        lblSenha.setAlignmentX(Component.LEFT_ALIGNMENT);
+        c.gridy = 2;
+        card.add(txtLogin, c);
 
-        txtSenha = new JPasswordField();
-        txtSenha.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        // Label senha
+        JLabel lblSenha = new JLabel("Senha:");
+        lblSenha.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblSenha.setForeground(Color.BLACK);
 
-        rightPanel.add(lblSenha);
-        rightPanel.add(Box.createVerticalStrut(8));
-        rightPanel.add(txtSenha);
-        rightPanel.add(Box.createVerticalStrut(35));
+        c.gridy = 3;
+        card.add(lblSenha, c);
 
-        btnEntrar = new JButton("Entrar");
-        btnEntrar.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        btnEntrar.setAlignmentX(Component.CENTER_ALIGNMENT);
-        btnEntrar.setMaximumSize(new Dimension(200, 45));
-        btnEntrar.setBackground(new Color(33, 150, 243));
-        btnEntrar.setForeground(Color.WHITE);
+        // Campo senha
+        JPasswordField txtSenha = new JPasswordField();
+        estilizarCampo(txtSenha);
+        txtSenha.setToolTipText("Digite sua senha");
 
-        rightPanel.add(btnEntrar);
-        rightPanel.add(Box.createVerticalStrut(20));
+        c.gridy = 4;
+        card.add(txtSenha, c);
 
-        getRootPane().setDefaultButton(btnEntrar);
+        // Botão Entrar (Windows 11)
+        JButton btnEntrar = new JButton("Entrar");
+        estilizarBotao(btnEntrar);
 
-        btnEntrar.addActionListener(e -> verificarLogin());
-    }
+        c.gridy = 5;
+        card.add(btnEntrar, c);
 
-    private void verificarLogin() {
-
-        String loginDigitado = txtLogin.getText().trim();
-        String senhaDigitada = new String(txtSenha.getPassword());
-
-        if (loginDigitado.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Digite o login.", "Aviso", JOptionPane.WARNING_MESSAGE);
-            txtLogin.requestFocus();
-            return;
-        }
-
-        if (senhaDigitada.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Digite a senha.", "Aviso", JOptionPane.WARNING_MESSAGE);
-            txtSenha.requestFocus();
-            return;
-        }
-
-        AuthService auth = new AuthService();
-        UserDAO userDAO = new UserDAO();
-
-        try {
-
-            // =============================
-            // 1️⃣ TENTAR AUTENTICAR
-            // =============================
-            Usuario u = auth.autenticar(loginDigitado, senhaDigitada);
-
-            if (u != null) {
-
-                // Primeiro acesso → FORÇAR troca de senha
-                if (u.isPrimeiroAcesso()) {
-                    new TelaTrocaSenha(u.getId(), u.getNomeCompleto(), u.getRole())
-                            .setVisible(true);
-                } else {
-                    new TelaPrincipal(u.getNomeCompleto(), u.getRole())
-                            .setVisible(true);
+        // === ENTER PARA LOGAR ===
+        KeyAdapter pressionarEnter = new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    autenticar(txtLogin, txtSenha);
                 }
-
-                dispose();
-                return;
             }
+        };
 
-            // =============================
-            // 2️⃣ LOGIN FALHOU
-            // =============================
-            Usuario u2 = userDAO.findByLogin(loginDigitado);
+        txtLogin.addKeyListener(pressionarEnter);
+        txtSenha.addKeyListener(pressionarEnter);
 
-            if (u2 == null) {
-                JOptionPane.showMessageDialog(this,
-                        "Usuário ou senha inválidos.",
-                        "Erro de Login",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+        btnEntrar.addActionListener(e -> autenticar(txtLogin, txtSenha));
 
-            if (u2.isBloqueado()) {
-                JOptionPane.showMessageDialog(this,
-                        "Conta BLOQUEADA. Contate o administrador.",
-                        "Conta Bloqueada",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+        // Adiciona tudo ao fundo
+        background.add(card);
 
-            // Mostrar tentativas restantes
-            int tent = u2.getTentativasLogin();
-            int rest = Math.max(0, 3 - tent);
-
-            JOptionPane.showMessageDialog(this,
-                    "Usuário ou senha inválidos.\nTentativas restantes: " + rest,
-                    "Erro de Login",
-                    JOptionPane.ERROR_MESSAGE);
-
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro ao conectar ao banco: " + ex.getMessage(),
-                    "Erro",
-                    JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
-        }
+        setContentPane(background);
     }
 
-    public static void main(String[] args) {
-        try { com.formdev.flatlaf.FlatLightLaf.setup(); } catch (Exception ignored) {}
-        SwingUtilities.invokeLater(() -> new TelaLogin().setVisible(true));
+    // === Estilo dos campos ===
+    private void estilizarCampo(JTextField campo) {
+        campo.setBackground(new Color(245, 245, 245));
+        campo.setForeground(Color.BLACK);
+        campo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        campo.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+                new EmptyBorder(8, 10, 8, 10)
+        ));
+    }
+
+    // === Botão moderno estilo Windows 11 ===
+    private void estilizarBotao(JButton botao) {
+
+        botao.setText("Entrar");
+        botao.setFocusPainted(false);
+        botao.setContentAreaFilled(false);
+        botao.setBorderPainted(false);
+        botao.setOpaque(false);
+        botao.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        botao.setPreferredSize(new Dimension(0, 40));
+
+        // UI personalizada
+        botao.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
+            @Override
+            public void paint(Graphics g, JComponent c) {
+
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Fundo do botão
+                g2.setColor(new Color(0, 120, 215)); // Azul Microsoft
+                g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10);
+
+                // Texto
+                g2.setColor(Color.WHITE);
+                FontMetrics fm = g2.getFontMetrics();
+                int textWidth = fm.stringWidth(botao.getText());
+                int x = (c.getWidth() - textWidth) / 2;
+                int y = (c.getHeight() + fm.getAscent()) / 2 - 2;
+                g2.drawString(botao.getText(), x, y);
+
+                g2.dispose();
+            }
+        });
+
+        // Hover
+        botao.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                botao.setBackground(new Color(20, 140, 235));
+                botao.repaint();
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                botao.setBackground(new Color(0, 120, 215));
+                botao.repaint();
+            }
+        });
+    }
+
+    // === Login ===
+    private void autenticar(JTextField txtLogin, JPasswordField txtSenha) {
+
+        if (txtLogin.getText().trim().isEmpty() || txtSenha.getPassword().length == 0) {
+            JOptionPane.showMessageDialog(this, "Preencha todos os campos!", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Usuario user = controller.login(
+                txtLogin.getText().trim(),
+                new String(txtSenha.getPassword())
+        );
+
+        if (user != null) {
+            new TelaPrincipal(user).setVisible(true);
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Usuário ou senha incorretos!", "Erro", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }

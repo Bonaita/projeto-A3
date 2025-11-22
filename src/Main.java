@@ -1,30 +1,24 @@
+
 import com.formdev.flatlaf.FlatLightLaf;
 import view.TelaLogin;
 
 import javax.swing.*;
 
-
-
 public class Main {
-
     public static void main(String[] args) {
-        // -----------------------------------------------------------
-        // 1️⃣ Aplica o Look and Feel moderno FlatLaf (tema claro)
-        //    Caso queira o tema escuro, troque para FlatDarkLaf.
-        // -----------------------------------------------------------
+
         try {
-            FlatLightLaf.setup();  // Aplica o FlatLaf Light
-            // FlatDarkLaf.setup();  // (opção) Tema escuro
-        } catch (Exception ex) {
-            System.out.println("Não foi possível carregar o FlatLaf.");
+            FlatLightLaf.setup(); // tema dark moderno
+            UIManager.put("Button.arc", 20);
+            UIManager.put("Component.arc", 20);
+            UIManager.put("TextComponent.arc", 20);
+        } catch (Exception e) {
+            System.out.println("Erro ao iniciar FlatLaf: " + e.getMessage());
         }
 
-        // -----------------------------------------------------------
-        // 2️⃣ Abre a TelaLogin como primeira tela do sistema
-        // -----------------------------------------------------------
+        // ===== INICIA O SISTEMA =====
         SwingUtilities.invokeLater(() -> {
-            TelaLogin login = new TelaLogin();
-            login.setVisible(true);
+            new TelaLogin().setVisible(true);
         });
     }
 }
