@@ -1,13 +1,10 @@
 package controller;
 
-import conexao.ConexaoMySQL;
 import dao.UsuarioDAO;
 import model.Usuario;
 import services.AuditoriaService;
 import services.AuthService;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -17,6 +14,7 @@ public class UsuarioController {
     private final AuthService authService = new AuthService();
     private final AuditoriaService auditoria = new AuditoriaService();
 
+    // Login delega ao AuthService (que cuida de tentativas/bloqueio)
     public Usuario login(String login, String senha) {
         try {
             return authService.autenticar(login, senha);
@@ -36,41 +34,44 @@ public class UsuarioController {
     }
 
     public void criarUsuario(Usuario usuario, String senhaPura) throws SQLException {
-
         String hash = authService.gerarHash(senhaPura);
         usuario.setSenhaHash(hash);
-
+        usuario.setPrimeiroAcesso(1);
+        usuario.setTentativasLogin(0);
+        usuario.setBloqueado(false);
         usuarioDAO.inserirUsuario(usuario);
-
-        auditoria.registrar(usuario.getId(),
-                "CRIAR_USUARIO",
-                "Usuário criado: " + usuario.getLogin()
-        );
+        auditoria.registrar(usuario.getId(), "CRIAR_USUARIO", "Usuário criado: " + usuario.getLogin());
     }
 
+    // Atualização quando o usuário muda sua senha (troca)
     public void atualizarSenha(Usuario usuario) throws SQLException {
         usuarioDAO.resetarSenha(usuario.getId(), usuario.getSenhaHash());
-        auditoria.registrar(usuario.getId(), "ALTERAR_SENHA", "Senha alterada.");
+        usuarioDAO.marcarPrimeiroAcessoConcluido(usuario.getId());
+        auditoria.registrar(usuario.getId(), "ALTERAR_SENHA", "Senha alterada pelo usuário.");
     }
 
+    // Reset de senha feito pelo admin
+    public void resetarSenha(int idUsuario) throws SQLException {
+        String novaSenha = "123456";
+        String hash = authService.gerarHash(novaSenha);
+        usuarioDAO.resetarSenha(idUsuario, hash);
+        auditoria.registrar(idUsuario, "RESETAR_SENHA", "Senha resetada para padrão pelo admin.");
+    }
+
+    // Permite a UI (admin) bloquear/desbloquear
+    public void alterarBloqueio(int idUsuario, boolean bloqueado) throws SQLException {
+        usuarioDAO.atualizarBloqueio(idUsuario, bloqueado);
+        auditoria.registrar(idUsuario, bloqueado ? "BLOQUEAR_USUARIO" : "DESBLOQUEAR_USUARIO",
+                "Admin alterou bloqueio para: " + (bloqueado ? "1" : "0"));
+    }
+
+    // Atualiza dados basicos (já existente no seu projeto)
     public void atualizarDadosBasicos(Usuario u) throws SQLException {
+        usuarioDAO.atualizarDadosBasicos(u);
 
-        String sql = """
-        UPDATE usuarios
-        SET nome_completo = ?, login = ?, role = ?, bloqueado = ?
-        WHERE id_usuario = ?
-    """;
-
-        try (Connection c = ConexaoMySQL.getConexao();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-
-            ps.setString(1, u.getNomeCompleto());
-            ps.setString(2, u.getLogin());
-            ps.setString(3, u.getRole());
-            ps.setString(4, u.isBloqueado() ? "1" : "0");
-            ps.setInt(5, u.getId());
-
-            ps.executeUpdate();
-        }
-    }
-}
+        auditoria.registrar(
+                u.getId(),
+                "ATUALIZAR_DADOS",
+                "Usuário alterou nome/login/role/bloqueio"
+        );
+}}

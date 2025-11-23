@@ -173,31 +173,34 @@ public class TelaGestaoManutencoes extends JFrame {
     }
 
     private void novo() {
-        JTextField txtData = new JTextField(LocalDate.now().toString());
-        JTextField txtTipo = new JTextField();
-        JTextField txtStatus = new JTextField();
-        JTextArea txtObs = new JTextArea(5, 20);
+        // Combos para menus suspensos
+        String[] tipos = {"Preventiva", "Corretiva", "Limpeza", "Atualização", "Ajuste"};
+        JComboBox<String> cbTipo = new JComboBox<>(tipos);
 
-        estilizarCampo(txtData);
-        estilizarCampo(txtTipo);
-        estilizarCampo(txtStatus);
+        String[] status = {"Pendente", "Agendada", "Em andamento", "Concluída", "Cancelada"};
+        JComboBox<String> cbStatus = new JComboBox<>(status);
+
+        JTextField txtData = new JTextField(LocalDate.now().toString());
+        JTextArea txtObs = new JTextArea(5, 20);
 
         Object[] campos = {
                 "Data (yyyy-mm-dd):", txtData,
-                "Tipo:", txtTipo,
-                "Status:", txtStatus,
+                "Tipo:", cbTipo,
+                "Status:", cbStatus,
                 "Observações:", new JScrollPane(txtObs)
         };
 
-        int op = JOptionPane.showConfirmDialog(this, campos, "Nova Manutenção", JOptionPane.OK_CANCEL_OPTION);
+        int op = JOptionPane.showConfirmDialog(
+                this, campos, "Nova Manutenção", JOptionPane.OK_CANCEL_OPTION
+        );
 
         if (op == JOptionPane.OK_OPTION) {
             try {
                 Manutencao m = new Manutencao();
                 m.setIdMaquina(Integer.parseInt(txtIdMaquina.getText()));
                 m.setDataAgendada(LocalDate.parse(txtData.getText()));
-                m.setTipo(txtTipo.getText());
-                m.setStatus(txtStatus.getText());
+                m.setTipo(cbTipo.getSelectedItem().toString());
+                m.setStatus(cbStatus.getSelectedItem().toString());
                 m.setObservacoes(txtObs.getText());
 
                 controller.inserir(m, usuario.getId());
@@ -211,7 +214,6 @@ public class TelaGestaoManutencoes extends JFrame {
 
     private void editar() {
         int row = tabela.getSelectedRow();
-
         if (row < 0) {
             JOptionPane.showMessageDialog(this, "Selecione uma manutenção.");
             return;
@@ -220,22 +222,29 @@ public class TelaGestaoManutencoes extends JFrame {
         int id = (int) tabela.getValueAt(row, 0);
 
         JTextField txtData = new JTextField(tabela.getValueAt(row, 1).toString());
-        JTextField txtTipo = new JTextField(tabela.getValueAt(row, 2).toString());
-        JTextField txtStatus = new JTextField(tabela.getValueAt(row, 3).toString());
-        JTextArea txtObs = new JTextArea(tabela.getValueAt(row, 4).toString());
 
-        estilizarCampo(txtData);
-        estilizarCampo(txtTipo);
-        estilizarCampo(txtStatus);
+        // Combo para tipo
+        String[] tipos = {"Preventiva", "Corretiva", "Limpeza", "Atualização", "Ajuste"};
+        JComboBox<String> cbTipo = new JComboBox<>(tipos);
+        cbTipo.setSelectedItem(tabela.getValueAt(row, 2).toString());
+
+        // Combo para status
+        String[] status = {"Pendente", "Agendada", "Em andamento", "Concluída", "Cancelada"};
+        JComboBox<String> cbStatus = new JComboBox<>(status);
+        cbStatus.setSelectedItem(tabela.getValueAt(row, 3).toString());
+
+        JTextArea txtObs = new JTextArea(tabela.getValueAt(row, 4).toString());
 
         Object[] campos = {
                 "Data:", txtData,
-                "Tipo:", txtTipo,
-                "Status:", txtStatus,
+                "Tipo:", cbTipo,
+                "Status:", cbStatus,
                 "Observações:", new JScrollPane(txtObs)
         };
 
-        int op = JOptionPane.showConfirmDialog(this, campos, "Editar Manutenção", JOptionPane.OK_CANCEL_OPTION);
+        int op = JOptionPane.showConfirmDialog(
+                this, campos, "Editar Manutenção", JOptionPane.OK_CANCEL_OPTION
+        );
 
         if (op == JOptionPane.OK_OPTION) {
             try {
@@ -243,8 +252,8 @@ public class TelaGestaoManutencoes extends JFrame {
                 m.setId(id);
                 m.setIdMaquina(Integer.parseInt(txtIdMaquina.getText()));
                 m.setDataAgendada(LocalDate.parse(txtData.getText()));
-                m.setTipo(txtTipo.getText());
-                m.setStatus(txtStatus.getText());
+                m.setTipo(cbTipo.getSelectedItem().toString());
+                m.setStatus(cbStatus.getSelectedItem().toString());
                 m.setObservacoes(txtObs.getText());
 
                 controller.atualizar(m, usuario.getId());

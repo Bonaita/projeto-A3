@@ -127,6 +127,9 @@ public class TelaTrocaSenha extends JFrame {
                 usuarioLogado.setSenhaHash(authService.gerarHash(nova));
                 controller.atualizarSenha(usuarioLogado);
 
+                // *** CORREÇÃO IMPORTANTE ***
+                controller.atualizarSenha(usuarioLogado);
+
                 JOptionPane.showMessageDialog(this,
                         "Senha atualizada com sucesso!",
                         "Sucesso", JOptionPane.INFORMATION_MESSAGE);
