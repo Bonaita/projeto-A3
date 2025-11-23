@@ -1,21 +1,24 @@
-import telas.TelaLogin;
+
+import com.formdev.flatlaf.FlatLightLaf;
+import view.TelaLogin;
 
 import javax.swing.*;
 
-
-
 public class Main {
-
     public static void main(String[] args) {
-        // Isso garante que a interface gráfica rode na "thread" correta
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                // 1. Cria a tela de login
-                TelaLogin telaDeLogin = new TelaLogin();
-                // 2. Torna a tela visível
-                telaDeLogin.setVisible(true);
-            }
+
+        try {
+            FlatLightLaf.setup(); // tema dark moderno
+            UIManager.put("Button.arc", 20);
+            UIManager.put("Component.arc", 20);
+            UIManager.put("TextComponent.arc", 20);
+        } catch (Exception e) {
+            System.out.println("Erro ao iniciar FlatLaf: " + e.getMessage());
+        }
+
+        // ===== INICIA O SISTEMA =====
+        SwingUtilities.invokeLater(() -> {
+            new TelaLogin().setVisible(true);
         });
     }
 }
