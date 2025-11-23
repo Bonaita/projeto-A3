@@ -3,96 +3,112 @@ package services;
 import dao.UsuarioDAO;
 import model.Usuario;
 import org.mindrot.jbcrypt.BCrypt;
+
 import java.sql.SQLException;
-import java.util.logging.Logger;
 
 /**
  * AuthService
  *
  * Responsável por:
- * - autenticação de usuários
- * - verificação de senha
- * - geração de hash seguro (bcrypt)
- * - controle de tentativas
- * - bloqueio automático
- * - registro de auditoria
+ *  - autenticar usuários
+ *  - verificar/generar hash de senha (BCrypt)
+ *  - controlar tentativas de login e bloqueio automático
  *
- * NÃO acessa o banco diretamente — sempre usa o DAO.
+ * Dependências:
+ *  - jBCrypt (org.mindrot.jbcrypt.BCrypt)
+ *  - UsuarioDAO com métodos: findByLogin, updateTentativas, bloquearUsuario
  */
 public class AuthService {
 
     private final UsuarioDAO usuarioDAO = new UsuarioDAO();
-    private final AuditoriaService auditoria = new AuditoriaService();
-    private final Logger logger = Logger.getLogger(AuthService.class.getName());
 
-    private final int MAX_TENTATIVAS = 3;  // pode ajustar
-
-    /**
-     * Gera hash seguro usando Bcrypt.
-     */
-    public String gerarHash(String senha) {
-        return BCrypt.hashpw(senha, BCrypt.gensalt(12));
-    }
+    // Limite de tentativas antes de bloquear o usuário
+    private static final int MAX_TENTATIVAS = 3;
 
     /**
-     * Verifica senha usando Bcrypt.
+     * Autentica um usuário pelo login e senha em texto puro.
+     *
+     * Comportamento:
+     *  - Se usuário não existir -> retorna null
+     *  - Se usuário bloqueado -> lança Exception
+     *  - Se senha inválida -> incrementa tentativas; bloqueia se atingir MAX_TENTATIVAS; retorna null
+     *  - Se senha válida -> zera tentativas e retorna o objeto Usuario
+     *
+     * @param login login
+     * @param senha senha em texto puro
+     * @return Usuario autenticado ou null (se credenciais inválidas)
+     * @throws Exception em caso de usuário bloqueado ou erro crítico
      */
-    public boolean verificarSenha(String senhaDigitada, String hashNoBanco) {
-        if (senhaDigitada == null || hashNoBanco == null) {
-            return false;
-        }
-        return BCrypt.checkpw(senhaDigitada, hashNoBanco);
-    }
+    public Usuario autenticar(String login, String senha) throws Exception {
+        try {
+            Usuario user = usuarioDAO.findByLogin(login);
 
-    /**
-     * Autentica o usuário:
-     * - busca por login
-     * - verifica bloqueio
-     * - verifica senha
-     * - registra tentativas
-     * - registra sucesso no login
-     */
-    public Usuario autenticar(String login, String senhaDigitada) throws SQLException {
-
-        Usuario user = usuarioDAO.findByLogin(login);
-
-        // 1. Verificar usuário
-        if (user == null) {
-            logger.info("Login falhou: usuário não encontrado (" + login + ")");
-            return null;
-        }
-
-        // 2. Verificar se está bloqueado
-        if (user.isBloqueado()) {
-            logger.warning("Tentativa de login em conta bloqueada: " + login);
-            auditoria.registrar(user.getId(), "LOGIN_BLOCKED", "Conta bloqueada tentou login.");
-            return null;
-        }
-
-        // 3. Verificar senha
-        boolean senhaOk = verificarSenha(senhaDigitada, user.getSenhaHash());
-
-        if (!senhaOk) {
-            usuarioDAO.incrementarTentativa(user.getId());
-            auditoria.registrar(user.getId(), "LOGIN_FAILURE", "Senha incorreta para " + login);
-
-            int novasTentativas = user.getTentativasLogin() + 1;
-
-            if (novasTentativas >= MAX_TENTATIVAS) {
-                usuarioDAO.bloquearUsuario(user.getId());
-                auditoria.registrar(user.getId(), "USER_BLOCKED",
-                        "Usuário bloqueado após " + MAX_TENTATIVAS + " tentativas.");
+            // usuário não existe
+            if (user == null) {
+                return null;
             }
 
-            return null;
+            // usuário bloqueado
+            if (user.isBloqueado()) {
+                throw new Exception("Usuário bloqueado. Entre em contato com o administrador.");
+            }
+
+            // validar senha
+            boolean senhaOk = verificarSenha(senha, user.getSenhaHash());
+
+            if (!senhaOk) {
+                // incrementar tentativas
+                int tentativasAtuais = user.getTentativasLogin();
+                int novasTentativas = tentativasAtuais + 1;
+
+                usuarioDAO.updateTentativas(user.getId(), novasTentativas);
+
+                // bloquear se ultrapassar limite
+                if (novasTentativas >= MAX_TENTATIVAS) {
+                    usuarioDAO.bloquearUsuario(user.getId());
+                    throw new Exception("Usuário bloqueado após " + novasTentativas + " tentativas inválidas.");
+                }
+
+                // senha inválida, sem exceção (retorna null)
+                return null;
+            }
+
+            // login com sucesso -> zerar tentativas
+            usuarioDAO.updateTentativas(user.getId(), 0);
+
+            return user;
+
+        } catch (SQLException sqle) {
+            // encapsular SQLException em Exception para o controller tratar
+            throw new Exception("Erro ao autenticar: " + sqle.getMessage(), sqle);
         }
+    }
 
-        // 4. Login OK → resetar tentativas
-        usuarioDAO.resetarTentativas(user.getId());
-        usuarioDAO.registrarUltimoLogin(user.getId());
+    /**
+     * Gera hash BCrypt para a senha em texto claro.
+     *
+     * @param senhaPlana senha em texto claro
+     * @return hash BCrypt
+     */
+    public String gerarHash(String senhaPlana) {
+        // work factor padrão 10
+        return BCrypt.hashpw(senhaPlana, BCrypt.gensalt(10));
+    }
 
-        auditoria.registrar(user.getId(), "LOGIN_SUCCESS", "Login realizado com sucesso.");
-
-        return user;
+    /**
+     * Verifica se a senha em texto simples corresponde ao hash armazenado.
+     *
+     * @param senhaPlana senha em texto claro
+     * @param hash armazenado
+     * @return true se bater
+     */
+    public boolean verificarSenha(String senhaPlana, String hash) {
+        if (hash == null || hash.isBlank()) return false;
+        try {
+            return BCrypt.checkpw(senhaPlana, hash);
+        } catch (Exception e) {
+            // qualquer problema ao checar o hash -> considerar inválido
+            return false;
+        }
     }
 }

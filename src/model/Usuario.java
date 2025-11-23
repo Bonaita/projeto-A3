@@ -10,6 +10,7 @@ public class Usuario {
     private String senhaHash;
     private boolean bloqueado;
     private String role;
+    private int primeiroAcesso; // 1 = primeiro acesso, 0 = normal
 
     // Campos necessários para AuthService
     private int tentativasLogin;
@@ -49,4 +50,12 @@ public class Usuario {
     // ===== Último login =====
     public LocalDateTime getUltimoLogin() { return ultimoLogin; }
     public void setUltimoLogin(LocalDateTime ultimoLogin) { this.ultimoLogin = ultimoLogin; }
+
+    public int getPrimeiroAcesso() {
+        return primeiroAcesso;
+    }
+
+    public void setPrimeiroAcesso(int primeiroAcesso) {
+        this.primeiroAcesso = primeiroAcesso;
+    }
 }

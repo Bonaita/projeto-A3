@@ -182,8 +182,23 @@ public class TelaLogin extends JFrame {
         );
 
         if (user != null) {
+
+            // ====== PRIMEIRO ACESSO (USANDO A COLUNA primeIro_acesso) ======
+            if (user.getPrimeiroAcesso() == 1) {
+                JOptionPane.showMessageDialog(this,
+                        "Este é seu primeiro acesso. Defina uma nova senha.",
+                        "Primeiro acesso",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                new TelaTrocaSenha(user).setVisible(true);
+                dispose();
+                return;
+            }
+
+            // ====== ACESSO NORMAL ======
             new TelaPrincipal(user).setVisible(true);
             dispose();
+
         } else {
             JOptionPane.showMessageDialog(this, "Usuário ou senha incorretos!", "Erro", JOptionPane.ERROR_MESSAGE);
         }
